@@ -93,14 +93,8 @@ create table casos (
   criado_em       timestamptz not null default now(),
   atualizado_em   timestamptz not null default now(),
   -- REGRA DE OURO: caso aberto exige responsável + próxima ação + data
-  constraint caso_aberto_tem_proxima_acao check (
-    fase in ('pago','devolvido')
-    or (responsavel is not null and proxima_data is not null and proxima_tipo is not null and proxima_nota is not null)
-  ),
-  constraint excecao_coerente check (
-    (exc_tipo is null and exc_desde is null and exc_revisao is null)
-    or (exc_tipo is not null and exc_desde is not null and exc_revisao is not null)
-  ),
+  constraint caso_aberto_tem_proxima_acao check (fase in ('pago','devolvido') or (responsavel is not null and proxima_data is not null and proxima_tipo is not null and proxima_nota is not null)),
+  constraint excecao_coerente check ((exc_tipo is null and exc_desde is null and exc_revisao is null) or (exc_tipo is not null and exc_desde is not null and exc_revisao is not null)),
   constraint caso_encerrado_tem_data check ((fase in ('pago','devolvido')) = (encerrado_em is not null))
 );
 create index casos_cliente_fase on casos (cliente_id, fase);
