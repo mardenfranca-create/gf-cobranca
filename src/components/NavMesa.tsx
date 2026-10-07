@@ -10,6 +10,7 @@ const ABAS = [
   { href: "/conferencia", label: "Conferência" },
   { href: "/clientes", label: "Clientes" },
   { href: "/importar", label: "Importar" },
+  { href: "/equipe", label: "Equipe", admin: true },
 ];
 
 export function NavMesa({ admin }: { admin: boolean }) {
@@ -19,7 +20,7 @@ export function NavMesa({ admin }: { admin: boolean }) {
   const qs = cliente ? `?cliente=${encodeURIComponent(cliente)}` : "";
   return (
     <nav className="tabs" aria-label="Seções da mesa">
-      {ABAS.filter((a) => admin || a.href !== "/clientes" || true).map((a) => (
+      {ABAS.filter((a) => admin || !a.admin).map((a) => (
         <Link key={a.href} href={`${a.href}${qs}`} aria-current={path === a.href || path.startsWith(a.href + "/") ? "page" : undefined}>
           {a.label}
         </Link>
