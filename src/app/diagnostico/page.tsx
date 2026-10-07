@@ -3,6 +3,14 @@ import { supabaseEnv } from "@/lib/config/supabase-env";
 /** Página pública de diagnóstico de configuração. Não expõe segredos: só o host da URL e o prefixo da chave. */
 export const dynamic = "force-dynamic";
 
+function Linha({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--ink-05)" }}>
+      <span className="meta">{k}</span><b className={ok === false ? "err" : ok ? "okt" : ""} style={{ fontSize: 13, overflowWrap: "anywhere" }}>{v}</b>
+    </div>
+  );
+}
+
 export default async function Diagnostico() {
   const env = supabaseEnv();
   const urlOk = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(env.url);
@@ -16,11 +24,6 @@ export default async function Diagnostico() {
       auth = `falha de rede: ${(e as Error).message}`;
     }
   }
-  const Linha = ({ k, v, ok }: { k: string; v: string; ok?: boolean }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--ink-05)" }}>
-      <span className="meta">{k}</span><b className={ok === false ? "err" : ok ? "okt" : ""} style={{ fontSize: 13, overflowWrap: "anywhere" }}>{v}</b>
-    </div>
-  );
   return (
     <main className="wrap" style={{ paddingBlock: 40 }}>
       <div className="panel" style={{ maxWidth: 720 }}>
