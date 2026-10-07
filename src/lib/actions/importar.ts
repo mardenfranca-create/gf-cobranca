@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
-import { exigeEquipe } from "@/lib/auth";
+import { exigeCliente, exigeEquipe, type Usuario } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { listaCasos, listaClientes, listaRegua, parcelasDosCasos } from "@/lib/data";
 import { addDias, fmtData, hojeISO } from "@/lib/domain/datas";
@@ -34,12 +34,21 @@ async function lerMatriz(file: File): Promise<unknown[][]> {
   return linhas.map((l) => l.split(sep).map((c) => c.trim()));
 }
 
-/** Passo 1: lê a planilha e devolve a reconciliação para o operador conferir. Não grava nada. */
+/** Passo 1 (mesa): lê a planilha e devolve a reconciliação para o operador conferir. Não grava nada. */
 export async function previaPlanilha(fd: FormData): Promise<Previa> {
   await exigeEquipe();
+  return previaCore(fd, String(fd.get("cliente") ?? "").trim() || null);
+}
+
+/** Passo 1 (portal): o cliente só enxerga e só alimenta a própria carteira. */
+export async function previaPlanilhaCliente(fd: FormData): Promise<Previa> {
+  const u = await exigeCliente();
+  return previaCore(fd, u.cliente_id);
+}
+
+async function previaCore(fd: FormData, clienteFixo: string | null): Promise<Previa> {
   const file = fd.get("arquivo");
   if (!(file instanceof File) || !file.size) return { ok: false, erro: "Escolha um arquivo .xlsx ou .csv." };
-  const clienteFixo = String(fd.get("cliente") ?? "").trim() || null;
   const hoje = hojeISO();
   const { linhas, faltam, cabecalho } = normalizaPlanilha(await lerMatriz(file), hoje);
   if (faltam.length) return { ok: false, erro: `Faltam colunas: ${faltam.join(", ")}. Cabeçalho lido: ${cabecalho.join(", ")}.` };
@@ -56,17 +65,36 @@ export async function previaPlanilha(fd: FormData): Promise<Previa> {
   };
 }
 
-/** Passo 2: aplica a reconciliação. Idempotente pelo hash: a mesma planilha não entra duas vezes. */
+/** Passo 2 (mesa): aplica a reconciliação. Idempotente pelo hash: a mesma planilha não entra duas vezes. */
 export async function aplicarPlanilha(fd: FormData): Promise<{ ok: boolean; msg: string }> {
   const u = await exigeEquipe();
+  return aplicarCore(fd, u, null);
+}
+
+/** Passo 2 (portal): mesma reconciliação, com a carteira travada no cliente logado. */
+export async function aplicarPlanilhaCliente(fd: FormData): Promise<{ ok: boolean; msg: string }> {
+  const u = await exigeCliente();
+  try {
+    return await aplicarCore(fd, u, u.cliente_id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/row-level security|permission denied/i.test(msg)) return { ok: false, msg: "O banco ainda não libera o envio de planilha pelo portal. Peça à equipe para aplicar a migration 0002 (supabase/migrations/0002_portal.sql)." };
+    throw e;
+  }
+}
+
+async function aplicarCore(fd: FormData, u: Usuario, clienteForcado: string | null): Promise<{ ok: boolean; msg: string }> {
   const previa = JSON.parse(String(fd.get("previa"))) as Extract<Previa, { ok: true }>;
+  if (clienteForcado && (previa.clienteFixo !== clienteForcado || previa.linhas.some((l) => l.cliente_id && l.cliente_id !== clienteForcado))) {
+    return { ok: false, msg: "A prévia não pertence à sua carteira. Envie a planilha de novo." };
+  }
   const marcarAusentes = fd.get("ausentes") === "on";
   const sb = await supabaseServer();
   const { data: ja } = await sb.from("importacoes").select("id").eq("hash", previa.hash).maybeSingle();
   if (ja) return { ok: false, msg: "Esta planilha já foi importada. Nada foi alterado." };
   const regua = mapaRegua(await listaRegua());
   const hoje = hojeISO();
-  const stamp = `planilha ${previa.arquivo} de ${fmtData(hoje)}`;
+  const stamp = `planilha ${previa.arquivo} de ${fmtData(hoje)}${u.papel === "cliente" ? ` (enviada pelo cliente · ${u.nome})` : ""}`;
   const n = { novos: 0, consolidados: 0, baixas: 0, excecoes: 0, ausentes: 0 };
   const ev = (caso_id: string, tipo: string, texto: string) => sb.from("eventos").insert({ caso_id, autor: u.nome, autor_id: u.id, tipo, texto, visivel_cliente: true });
 
