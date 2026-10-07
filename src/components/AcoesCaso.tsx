@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { addDias } from "@/lib/domain/datas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type Proposta } from "@/lib/domain/types";
 import * as A from "@/lib/actions/casos";
+import { emitirCobranca, emitirParcelasAcordo } from "@/lib/actions/asaas";
 
 type Acao = { k: string; titulo: string; sub: string; form: ReactNode; danger?: boolean };
 
@@ -15,7 +16,7 @@ const Sel = ({ name, opts, def }: { name: string; opts: [string, string][]; def?
   <div className="inp"><select name={name} defaultValue={def}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
 );
 
-export function AcoesCaso({ caso, cliente, hoje, propostaPendente }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null }) {
+export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean } }) {
   const [aberta, setAberta] = useState<string | null>(null);
   const H = <input type="hidden" name="caso_id" value={caso.id} />;
   const acoes: Acao[] = [];
@@ -99,6 +100,30 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente }: { caso: Cas
   } else {
     acoes.push(contato, agendar, atribuir, excecao);
     if (caso.valor_atualizado == null || !caso.documento_digits) acoes.push(cadastro);
+    const podeEmitir = !!asaas?.ativo && !!caso.documento_digits && caso.valor_atualizado != null;
+    const sandbox = asaas?.ambiente !== "production";
+    if (asaas?.ativo && caso.fase === "acordo" && !asaas.temCobrancas) acoes.push({ k: "asaas_acordo", titulo: "Emitir parcelas do acordo no Asaas", sub: `Entrada + parcelas mensais, uma cobrança por parcela, com boleto e Pix. Baixa automática por webhook.${sandbox ? " Ambiente: sandbox (teste)." : ""}`, form: (
+      <form action={emitirParcelasAcordo} className="act-form">{H}
+        <div className="frow">
+          <Campo label="Total do acordo"><div className="inp"><span>R$</span><input type="number" step="0.01" name="total" defaultValue={caso.valor_atualizado ?? ""} required /></div></Campo>
+          <Campo label="Parcelas"><div className="inp"><input type="number" name="parcelas" min={1} max={60} defaultValue={caso.acordo?.parc ?? 6} /><span>×</span></div></Campo>
+          <Campo label="Entrada"><div className="inp"><input type="number" name="entrada" min={0} max={100} defaultValue={0} /><span>%</span></div></Campo>
+          <Campo label="1º vencimento"><div className="inp"><input type="date" name="primeiro" defaultValue={addDias(hoje, 5)} min={hoje} /></div></Campo>
+        </div>
+        <div className="verdict warn">Multa de 2% e juros de 1% ao mês após o vencimento, aplicados pelo Asaas. O devedor recebe boleto e Pix por e-mail/SMS do Asaas se tiver contato cadastrado lá.</div>
+        <div className="actions"><button className="btn sm" type="submit">Emitir no Asaas</button></div>
+      </form>) });
+    if (podeEmitir && caso.fase !== "acordo") acoes.push({ k: "asaas_boleto", titulo: "Emitir boleto/Pix no Asaas", sub: `Cobrança única do valor em aberto. Pagou, o caso encerra sozinho.${sandbox ? " Ambiente: sandbox (teste)." : ""}`, form: (
+      <form action={emitirCobranca} className="act-form">{H}<input type="hidden" name="tipo" value="integral" />
+        <div className="frow">
+          <Campo label="Valor"><div className="inp"><span>R$</span><input type="number" step="0.01" name="valor" defaultValue={caso.valor_atualizado ?? ""} required /></div></Campo>
+          <Campo label="Vencimento"><div className="inp"><input type="date" name="vencimento" defaultValue={addDias(hoje, 5)} min={hoje} /></div></Campo>
+          <Campo label="Desconto até o vencimento"><div className="inp"><input type="number" name="desconto" min={0} max={90} defaultValue={0} /><span>%</span></div></Campo>
+        </div>
+        <Campo label="Descrição no boleto"><div className="inp"><input name="descricao" defaultValue={`${caso.referencia} · ${cliente.nome_curto}`} /></div></Campo>
+        <div className="actions"><button className="btn sm" type="submit">Emitir no Asaas</button></div>
+      </form>) });
+    if (asaas && !asaas.ativo) acoes.push({ k: "asaas_off", titulo: "Asaas não configurado", sub: "Cadastre ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN na Vercel para emitir boletos daqui.", form: <div className="act-form"><div className="verdict warn">Veja o roteiro no README, seção Asaas.</div></div> });
     if (caso.fase === "acordo") {
       acoes.push({ k: "parcela", titulo: "Marcar parcela paga", sub: caso.acordo ? `Parcela ${caso.acordo.paid + 1} de ${caso.acordo.parc}.` : "Informe o parcelamento na primeira vez.", form: (
         <form action={A.marcarParcelaPaga} className="act-form">{H}

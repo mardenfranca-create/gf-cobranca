@@ -4,15 +4,20 @@ import { casoPorId, mapaClientes } from "@/lib/data";
 import { brl, diffDias, fmtData, fmtDataHora, hojeISO } from "@/lib/domain/datas";
 import { EXCECOES, isAberto } from "@/lib/domain/types";
 import { AcoesCaso } from "@/components/AcoesCaso";
+import { CobrancasCaso } from "@/components/CobrancasCaso";
+import { asaasEnv } from "@/lib/asaas";
 import { Pill, PillExcecao } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Caso" };
 
 export default async function CasoPage(props: PageProps<"/casos/[id]">) {
   const { id } = await props.params;
+  const sp = await props.searchParams;
+  const aviso = typeof sp.ok === "string" ? { cls: "in", msg: sp.ok } : typeof sp.erro === "string" ? { cls: "out", msg: sp.erro } : null;
   const dados = await casoPorId(id);
   if (!dados) notFound();
-  const { caso, eventos, parcelas, propostas } = dados;
+  const { caso, eventos, parcelas, propostas, cobrancas } = dados;
+  const asaas = asaasEnv();
   const clientes = await mapaClientes();
   const cliente = clientes[caso.cliente_id];
   const hoje = hojeISO();
@@ -33,6 +38,7 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
           </div>
         </div>
       </div>
+      {aviso && <div className={`verdict ${aviso.cls}`} style={{ marginBottom: 14 }}>{aviso.msg}</div>}
       <div className="caso-grid">
         <div className="stack">
           <div className="money">
@@ -50,7 +56,7 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
           {caso.exc_tipo && <div className="verdict warn"><b>Régua pausada.</b> {EXCECOES[caso.exc_tipo]} desde {fmtData(caso.exc_desde)}{caso.exc_motivo ? `: ${caso.exc_motivo}` : ""}. Nenhuma cobrança é disparada até a revisão em {fmtData(caso.exc_revisao)}.</div>}
           {caso.pendencias.length > 0 && <div className="verdict out"><b>Pendências do cadastro:</b> {caso.pendencias.join(" · ")}</div>}
           {pendente && <div className="verdict warn"><b>Proposta com o cliente:</b> {pendente.desconto_pct}% · {pendente.parcelas}× · entrada {pendente.entrada_pct}% · total {brl(pendente.total)}. Enviada em {fmtData(pendente.enviada_em.slice(0, 10))}.</div>}
-          <div><p className="sec-t">Ações</p><AcoesCaso caso={caso} cliente={cliente} hoje={hoje} propostaPendente={pendente} /></div>
+          <div><p className="sec-t">Ações</p><AcoesCaso caso={caso} cliente={cliente} hoje={hoje} propostaPendente={pendente} asaas={{ ativo: asaas.ok, ambiente: asaas.env, temCobrancas: cobrancas.some((c) => c.status !== "DELETED") }} /></div>
         </div>
         <div className="stack">
           <div className="panel">
@@ -69,6 +75,7 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
               {origem.trello_url && <><dt>Cartão</dt><dd><a href={origem.trello_url} target="_blank" rel="noopener" style={{ color: "var(--bronze-dark)" }}>abrir no Trello</a></dd></>}
             </dl>
           </div>
+          <CobrancasCaso cobrancas={cobrancas} casoId={caso.id} mesa />
           {parcelas.length > 0 && (
             <div className="panel"><p className="sec-t">Parcelas consolidadas ({parcelas.length})</p>
               <dl className="dl">{parcelas.map((p) => <span key={p.id} style={{ display: "contents" }}><dt>{p.referencia}</dt><dd className="num">{brl(p.valor)} · venc. {fmtData(p.vencimento)}{p.paga ? " · paga" : ""}</dd></span>)}</dl>
