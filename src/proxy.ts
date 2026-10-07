@@ -6,6 +6,12 @@ const PUBLIC = ["/login", "/auth"];
 /** Renova a sessão do Supabase a cada request e protege as rotas da mesa e do portal.
  *  A autorização fina (admin/operador/cliente) acontece no servidor, em cada página e ação. */
 export async function proxy(request: NextRequest) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return new NextResponse(
+      "Configuração incompleta: defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nas variáveis de ambiente da Vercel (para Production e Preview) e faça o redeploy.",
+      { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
