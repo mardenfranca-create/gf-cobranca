@@ -1,21 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { supabaseEnv } from "@/lib/config/supabase-env";
 const PUBLIC = ["/login", "/auth"];
 
 /** Renova a sessão do Supabase a cada request e protege as rotas da mesa e do portal.
  *  A autorização fina (admin/operador/cliente) acontece no servidor, em cada página e ação. */
 export async function proxy(request: NextRequest) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  if (request.nextUrl.pathname === "/diagnostico") return NextResponse.next({ request });
+  if (!supabaseEnv().ok) {
     return new NextResponse(
-      "Configuração incompleta: defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nas variáveis de ambiente da Vercel (para Production e Preview) e faça o redeploy.",
+      "Configuração incompleta ou inválida das variáveis do Supabase. Abra /diagnostico para ver o que está errado.",
       { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } },
     );
   }
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseEnv().url,
+    supabaseEnv().anon,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
