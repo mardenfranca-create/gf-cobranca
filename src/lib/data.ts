@@ -52,3 +52,41 @@ export async function parcelasDosCasos(ids: string[]): Promise<Record<string, { 
   for (const p of data ?? []) (out[p.caso_id] ??= []).push({ referencia: p.referencia, vencimento: p.vencimento });
   return out;
 }
+
+export async function clientePorId(id: string): Promise<Cliente | null> {
+  const sb = await supabaseServer();
+  const { data } = await sb.from("clientes").select("*").eq("id", id).maybeSingle();
+  return (data as Cliente | null) ?? null;
+}
+
+/** Propostas pendentes (fora da alçada) que esperam decisão do cliente. O RLS restringe à carteira do usuário. */
+export async function propostasPendentes(cliente?: string | null): Promise<(Proposta & { caso: Caso })[]> {
+  const sb = await supabaseServer();
+  const { data, error } = await sb.from("propostas").select("*").eq("status", "pending").order("enviada_em", { ascending: true }).limit(500);
+  if (error) throw error;
+  const props = (data ?? []) as Proposta[];
+  if (!props.length) return [];
+  const { data: casos } = await sb.from("casos").select("*").in("id", props.map((p) => p.caso_id));
+  const porId = Object.fromEntries(((casos ?? []) as Caso[]).map((c) => [c.id, c]));
+  return props.map((p) => ({ ...p, caso: porId[p.caso_id] })).filter((p) => p.caso && (!cliente || p.caso.cliente_id === cliente));
+}
+
+/** Últimos eventos visíveis ao usuário (o RLS já filtra visivel_cliente para o cliente). */
+export async function ultimosEventos(limite = 12): Promise<Evento[]> {
+  const sb = await supabaseServer();
+  const { data, error } = await sb.from("eventos").select("*").order("data", { ascending: false }).limit(limite);
+  if (error) throw error;
+  return (data ?? []) as Evento[];
+}
+
+export type Ajuste = { id: string; cliente_id: string; autor: string; campo: string; antes: unknown; depois: unknown; criado_em: string };
+export async function listaAjustes(cliente_id: string, limite = 20): Promise<Ajuste[]> {
+  const sb = await supabaseServer();
+  const { data, error } = await sb.from("ajustes_cliente").select("*").eq("cliente_id", cliente_id).order("criado_em", { ascending: false }).limit(limite);
+  if (error) {
+    // Tabela ainda não criada (migration 0002 não aplicada): não derruba a página.
+    if (/ajustes_cliente/.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as Ajuste[];
+}

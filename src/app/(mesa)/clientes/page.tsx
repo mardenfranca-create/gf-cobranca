@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { exigeEquipe } from "@/lib/auth";
-import { listaCasos, listaClientes, listaRegua } from "@/lib/data";
-import { brl, compacto, diffDias, hojeISO } from "@/lib/domain/datas";
+import { listaAjustes, listaCasos, listaClientes, listaRegua } from "@/lib/data";
+import { brl, compacto, diffDias, fmtData, hojeISO } from "@/lib/domain/datas";
 import { isAberto } from "@/lib/domain/types";
 import { criarCliente, salvarCliente, salvarRegua } from "@/lib/actions/clientes";
 import { PageHead } from "@/components/ui";
@@ -14,6 +14,7 @@ export default async function ClientesPage() {
   const admin = u.papel === "admin";
   const hoje = hojeISO();
   const [clientes, regua, casos] = await Promise.all([listaClientes(), listaRegua(), listaCasos()]);
+  const ajustes = Object.fromEntries(await Promise.all(clientes.map(async (c) => [c.id, await listaAjustes(c.id, 3)] as const)));
   return (
     <>
       <PageHead eyebrow="Clientes" titulo="Carteiras sob gestão" sub="Régua, alçadas, honorários e prazo de protesto. Só administradores alteram." />
@@ -63,6 +64,12 @@ export default async function ClientesPage() {
               <div className="field"><label>Contato no cliente</label><div className="inp"><input name="contato" defaultValue={c.contato ?? ""} placeholder="Nome · telefone · e-mail" disabled={!admin} /></div></div>
               {admin && <div className="actions"><button className="btn ghost sm" type="submit">Salvar {c.nome_curto}</button></div>}
               <div className="meta">Parcela mínima de referência: {brl(c.limites.min, false)}</div>
+              {ajustes[c.id]?.length > 0 && (
+                <div className="meta" style={{ display: "grid", gap: 2 }}>
+                  <b style={{ color: "var(--ink-80)" }}>Últimos ajustes</b>
+                  {ajustes[c.id].map((a) => <span key={a.id} className="num">{fmtData(a.criado_em.slice(0, 10))} · {a.autor} alterou {a.campo === "limites" ? "alçadas" : a.campo}</span>)}
+                </div>
+              )}
             </form>
           );
         })}

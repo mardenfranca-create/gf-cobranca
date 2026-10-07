@@ -8,7 +8,12 @@ const K: Record<string, [string, string]> = {
   baixa: ["Baixa informada: vai para conferência", "okt"], excecao: ["Não cobrar: exceção registrada", "err"],
 };
 
-export function ImportarPlanilha({ clientes, clienteFixo }: { clientes: { id: string; nome: string }[]; clienteFixo: string | null }) {
+type Acoes = { previa: typeof previaPlanilha; aplicar: typeof aplicarPlanilha };
+
+/** Formulário de planilha com prévia e aplicação. Na mesa usa as actions da equipe; no portal recebe as do cliente via `acoes`. */
+export function ImportarPlanilha({ clientes, clienteFixo, acoes, titulo }: { clientes: { id: string; nome: string }[]; clienteFixo: string | null; acoes?: Acoes; titulo?: string }) {
+  const previaFn = acoes?.previa ?? previaPlanilha;
+  const aplicarFn = acoes?.aplicar ?? aplicarPlanilha;
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -16,10 +21,10 @@ export function ImportarPlanilha({ clientes, clienteFixo }: { clientes: { id: st
 
   return (
     <div className="panel">
-      <div className="panel-head"><h2>Planilha de casos (.xlsx ou .csv)</h2></div>
-      <form className="drop" action={(fd) => start(async () => { setMsg(null); setPrevia(await previaPlanilha(fd)); })}>
-        <h2>Escolha a planilha do cliente</h2>
-        <p>{clienteFixo ? `Todas as linhas entram para ${nome(clienteFixo)}.` : 'Com "Todos os clientes" no topo, a planilha precisa da coluna cliente.'} A planilha é comparada com a carteira antes de gravar qualquer coisa.</p>
+      <div className="panel-head"><h2>{titulo ?? "Planilha de casos (.xlsx ou .csv)"}</h2></div>
+      <form className="drop" action={(fd) => start(async () => { setMsg(null); setPrevia(await previaFn(fd)); })}>
+        <h2>{acoes ? "Escolha a planilha de inadimplentes" : "Escolha a planilha do cliente"}</h2>
+        <p>{acoes ? "Nada é gravado antes de você conferir o resultado." : clienteFixo ? `Todas as linhas entram para ${nome(clienteFixo)}.` : 'Com "Todos os clientes" no topo, a planilha precisa da coluna cliente.'} A planilha é comparada com a carteira antes de gravar qualquer coisa.</p>
         <input type="hidden" name="cliente" value={clienteFixo ?? ""} />
         <input type="file" name="arquivo" accept=".xlsx,.xls,.csv" required />
         <button className="btn" type="submit" disabled={pending}>{pending ? "Lendo…" : "Conferir planilha"}</button>
@@ -27,7 +32,7 @@ export function ImportarPlanilha({ clientes, clienteFixo }: { clientes: { id: st
       {msg && <div className="verdict in" style={{ marginTop: 12 }}>{msg}</div>}
       {previa && !previa.ok && <div className="verdict out" style={{ marginTop: 12 }}>{previa.erro}</div>}
       {previa && previa.ok && (
-        <form style={{ marginTop: 14 }} action={(fd) => start(async () => { const r = await aplicarPlanilha(fd); setMsg(r.msg); if (r.ok) setPrevia(null); })}>
+        <form style={{ marginTop: 14 }} action={(fd) => start(async () => { const r = await aplicarFn(fd); setMsg(r.msg); if (r.ok) setPrevia(null); })}>
           <input type="hidden" name="previa" value={JSON.stringify(previa)} />
           {previa.jaImportada && <div className="verdict out" style={{ marginBottom: 12 }}>Esta planilha já foi importada antes (mesmo conteúdo). Aplicar de novo não fará nada.</div>}
           <div className="up-sum"><div><b>{previa.linhas.length} linhas lidas.</b> <span className="okt">{previa.linhas.length - previa.resumo.erros} válidas</span>{previa.resumo.erros > 0 && <> · <span className="err">{previa.resumo.erros} com erro</span></>}</div>
@@ -39,7 +44,7 @@ export function ImportarPlanilha({ clientes, clienteFixo }: { clientes: { id: st
           {previa.ausentes.length > 0 && (
             <div className="verdict warn" style={{ marginBottom: 12 }}>
               <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}><input type="checkbox" name="ausentes" style={{ marginTop: 3 }} />
-                <span><b>{previa.ausentes.length} casos abertos do(s) cliente(s) não aparecem nesta planilha.</b> Marque se esta é a posição completa de inadimplência: eles vão para &quot;Pagamento a confirmar&quot; em vez de desaparecer. Desmarcado, ficam como estão.</span></label>
+                <span><b>{previa.ausentes.length} casos abertos {acoes ? "da sua carteira" : "do(s) cliente(s)"} não aparecem nesta planilha.</b> Marque se esta é a posição completa de inadimplência: eles vão para &quot;Pagamento a confirmar&quot; em vez de desaparecer. Desmarcado, ficam como estão.</span></label>
             </div>
           )}
           <div className="tbl-wrap"><table style={{ minWidth: 640 }}>

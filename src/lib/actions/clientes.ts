@@ -36,18 +36,29 @@ export async function reprogramarAutomaticos() {
 }
 
 export async function salvarCliente(fd: FormData) {
-  await exigeAdmin();
+  const u = await exigeAdmin();
   const sb = await supabaseServer();
   const id = String(fd.get("id"));
+  const { data: atual } = await sb.from("clientes").select("*").eq("id", id).single();
+  if (!atual) throw new Error("Cliente não encontrado");
   const num = (k: string, d: number) => { const v = Number(fd.get(k)); return Number.isFinite(v) ? v : d; };
-  const { error } = await sb.from("clientes").update({
+  const novo = {
     limites: { desc: num("desc", 20), parc: num("parc", 10), ent: num("ent", 10), min: num("min", 250) },
     honorarios: { extra: num("extra", 20), jud: num("jud", 25) },
     protesto_dias: num("protesto", 45),
     contato: String(fd.get("contato") ?? "").trim() || null,
-  }).eq("id", id);
+  };
+  const { error } = await sb.from("clientes").update(novo).eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/clientes");
+  // Registro de quem mudou o quê (tabela da migration 0002; se ainda não existir, não bloqueia o salvamento).
+  const registros = (Object.keys(novo) as (keyof typeof novo)[])
+    .filter((k) => JSON.stringify(novo[k]) !== JSON.stringify((atual as Record<string, unknown>)[k] ?? null))
+    .map((k) => ({ cliente_id: id, autor: u.nome, autor_id: u.id, campo: k, antes: (atual as Record<string, unknown>)[k] ?? null, depois: novo[k] }));
+  if (registros.length) {
+    const { error: e2 } = await sb.from("ajustes_cliente").insert(registros);
+    if (e2 && !/ajustes_cliente/.test(e2.message)) throw new Error(e2.message);
+  }
+  revalidatePath("/", "layout");
 }
 
 export async function criarCliente(fd: FormData) {
