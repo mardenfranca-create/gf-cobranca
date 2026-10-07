@@ -21,7 +21,7 @@ export function ImportarPlanilha({ clientes, clienteFixo }: { clientes: { id: st
         <h2>Escolha a planilha do cliente</h2>
         <p>{clienteFixo ? `Todas as linhas entram para ${nome(clienteFixo)}.` : 'Com "Todos os clientes" no topo, a planilha precisa da coluna cliente.'} A planilha é comparada com a carteira antes de gravar qualquer coisa.</p>
         <input type="hidden" name="cliente" value={clienteFixo ?? ""} />
-        <input type="file" name="arquivo" accept=".xlsx,.xls,.csv" required />
+        <input type="file" name="arquivo" accept=".xlsx,.xls,.csv,.txt" required />
         <button className="btn" type="submit" disabled={pending}>{pending ? "Lendo…" : "Conferir planilha"}</button>
       </form>
       {msg && <div className="verdict in" style={{ marginTop: 12 }}>{msg}</div>}
@@ -63,10 +63,10 @@ export function ImportarTrello() {
   const [pending, start] = useTransition();
   return (
     <div className="panel">
-      <div className="panel-head"><h2>Recarregar do Trello (JSON)</h2></div>
+      <div className="panel-head"><h2>Carga do Trello (arquivo JSON exportado)</h2><p>Cartões já importados são ignorados</p></div>
       <form className="drop" action={(fd) => start(async () => { const r = await importarTrello(fd); setMsg(r.msg); })}>
         <p>Menu do quadro → Imprimir, exportar e compartilhar → Exportar como JSON. Cartões já importados são ignorados; só os novos entram.</p>
-        <input type="file" name="arquivo" accept=".json,application/json" required />
+        <input type="file" name="arquivo" required />
         <button className="btn ghost" type="submit" disabled={pending}>{pending ? "Importando…" : "Importar do Trello"}</button>
       </form>
       {msg && <div className="verdict in" style={{ marginTop: 12 }}>{msg}</div>}
