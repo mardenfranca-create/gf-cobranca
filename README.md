@@ -14,7 +14,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 |---|---|---|
 | 1. Núcleo | Login da equipe, casos, régua configurável, fila, agenda, quadro, exceções, importação com reconciliação, carga do Trello | em produção |
 | 2. Portal do cliente | Login por cliente, visão geral, carteira, aprovação de propostas fora da alçada, envio de planilha, informar pagamento, alçadas com registro de alteração | nesta versão |
-| 3. Integrações | Asaas (boleto, baixa por webhook, split), WhatsApp oficial, exportação do Astrea | |
+| 3. Integrações | **Asaas (boleto/Pix e baixa automática por webhook): nesta versão.** Split, WhatsApp oficial e exportação do Astrea: a seguir | em andamento |
 | 4. Financeiro | Fechamento de êxito, comissão, conciliação | |
 
 ## Colocar no ar (primeira vez)
@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2) e `0003_asaas.sql` (etapa 3). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -56,6 +56,7 @@ from auth.users u where u.id = p.id and u.email = 'financeiro@wrj.com.br';
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (só servidor)
+   - `ASAAS_API_KEY`, `ASAAS_ENV`, `ASAAS_WEBHOOK_TOKEN` (etapa 3, ver seção Asaas)
 3. Deploy. Abra a URL e entre com um usuário da equipe.
 
 ### 4. Carga da carteira do Trello
@@ -101,6 +102,8 @@ scripts/               carga inicial
 - **propostas**: termos, dentro/fora da alçada, status.
 - **importacoes**: hash único por planilha.
 - **ajustes_cliente**: registro imutável de quem alterou alçadas, contato e honorários (cliente ou admin).
+- **cobrancas**: boletos/Pix emitidos no Asaas (um por parcela), com status e links.
+- **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
 - **regua**: prazos configuráveis que governam a próxima ação.
 
 ## Portal do cliente (etapa 2)
@@ -115,3 +118,35 @@ O cliente entra com o próprio usuário e cai em `/portal`. Tudo passa pelo RLS:
 - **Alçadas e contato**: o cliente ajusta a própria alçada; cada alteração entra em `ajustes_cliente` com autor e data, e aparece na aba Clientes da mesa.
 
 Honorários e prazo de protesto são do contrato: só admin altera, pela mesa.
+
+## Asaas (etapa 3): boleto, Pix e baixa automática
+
+A cobrança é emitida da conta Asaas **do escritório**: o devedor paga ao Asaas, o Asaas avisa o sistema (webhook) e o caso baixa sozinho. O repasse ao cliente continua manual até o split entrar.
+
+### Configurar (uma vez)
+
+1. **Sandbox primeiro.** Crie uma conta em https://sandbox.asaas.com, gere a chave em *Integrações → API* e cadastre na Vercel:
+   - `ASAAS_API_KEY` = a chave
+   - `ASAAS_ENV` = `sandbox`
+   - `ASAAS_WEBHOOK_TOKEN` = uma senha longa que você inventa (ex.: 32 caracteres aleatórios)
+2. No Asaas, *Integrações → Webhooks → Novo webhook*:
+   - URL: `https://SEU-DOMINIO/api/asaas/webhook`
+   - Token de autenticação: o mesmo valor de `ASAAS_WEBHOOK_TOKEN`
+   - Eventos: marque os de **cobrança** (PAYMENT_RECEIVED, PAYMENT_CONFIRMED, PAYMENT_OVERDUE, PAYMENT_DELETED, PAYMENT_REFUNDED e os de chargeback). Os demais são aceitos e ignorados.
+   - Versão da API: v3. Fila ativa.
+3. Redeploy na Vercel. Abra `/diagnostico`: a seção Asaas tem que estar toda verde. `GET /api/asaas/webhook` responde `configurado: true`.
+4. Teste no sandbox: num caso com CPF/CNPJ e valor, *Emitir boleto/Pix no Asaas*. No painel do sandbox, marque a cobrança como recebida. Em segundos o caso vai para "Pago" com o evento "Pagamento confirmado pelo Asaas".
+5. Produção: troque `ASAAS_API_KEY` pela chave da conta real e `ASAAS_ENV` para `production`; cadastre o webhook de novo na conta real. Redeploy.
+
+### O que acontece
+
+| Evento no Asaas | No sistema |
+|---|---|
+| Cobrança paga (RECEIVED/CONFIRMED) | Marca a cobrança paga. Última em aberto → caso **Pago**, encerrado. Senão, próxima conferência do acordo em 30 dias. |
+| Vencida (OVERDUE) | Tarefa para o responsável hoje: "vencida sem pagamento: cobrar o devedor". |
+| Cancelada (DELETED) | Registra no histórico (interno). |
+| Estornada / chargeback | Caso volta para "Em negociação" com tarefa "verificar e retomar". |
+
+Eventos repetidos são ignorados pelo `id`. Webhook sem token ou com token errado recebe 401. Se o webhook atrasar, "Sincronizar" na cobrança consulta o Asaas na hora.
+
+Nota: os nomes de cabeçalho (`access_token`, `asaas-access-token`) e as URLs base seguem a API v3; se o Asaas mudar algo, `ASAAS_BASE_URL` sobrescreve a URL sem mexer em código.

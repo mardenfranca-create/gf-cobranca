@@ -90,6 +90,7 @@ export type Caso = {
   processo: string | null;
   acordo: { parc: number; paid: number; next: string } | null;
   origem: { trello_url?: string; trello_list?: string; etiquetas?: string[] } | null;
+  asaas_customer_id: string | null;
   pendencias: string[];
   entrada_em: string;
   ultima_mov_em: string;
@@ -132,3 +133,28 @@ export type Proposta = {
 export const EQUIPE = ["Ana Paula", "Letícia", "Jaqueline", "Lucas", "Marden"] as const;
 
 export const isAberto = (c: Pick<Caso, "fase">) => !FASES_FECHADAS.includes(c.fase);
+
+export type Cobranca = {
+  id: string;
+  caso_id: string;
+  asaas_id: string;
+  tipo: "integral" | "entrada" | "parcela" | "avulsa";
+  parcela_n: number | null;
+  parcelas: number | null;
+  valor: number;
+  vencimento: string;
+  status: string;
+  invoice_url: string | null;
+  boleto_url: string | null;
+  pix_copia: string | null;
+  valor_pago: number | null;
+  pago_em: string | null;
+  criado_por: string;
+  criado_em: string;
+  atualizado_em: string;
+};
+export const COBRANCA_STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Em aberto", cls: "ph-regua" }, RECEIVED: { label: "Pago", cls: "ph-pago" }, CONFIRMED: { label: "Pago (confirmado)", cls: "ph-pago" },
+  OVERDUE: { label: "Vencido", cls: "ph-quebra" }, REFUNDED: { label: "Estornado", cls: "ph-judicial" }, DELETED: { label: "Cancelado", cls: "ph-devolvido" },
+  RECEIVED_IN_CASH: { label: "Baixa manual", cls: "ph-pago" }, AWAITING_RISK_ANALYSIS: { label: "Em análise", cls: "ph-confirma" },
+};

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listaCasos, mapaClientes } from "@/lib/data";
+import { baixasAsaas, listaCasos, mapaClientes } from "@/lib/data";
 import { brl, fmtData, hojeISO } from "@/lib/domain/datas";
 import { LinkCaso, PageHead, Valor } from "@/components/ui";
 
@@ -9,7 +9,8 @@ export default async function ConferenciaPage(props: PageProps<"/conferencia">) 
   const sp = await props.searchParams;
   const cliente = typeof sp.cliente === "string" ? sp.cliente : null;
   const hoje = hojeISO();
-  const [casos, clientes] = await Promise.all([listaCasos({ cliente }), mapaClientes()]);
+  const [casos, clientes, baixas] = await Promise.all([listaCasos({ cliente }), mapaClientes(), baixasAsaas(30)]);
+  const baixasFiltradas = cliente ? baixas.filter((b) => b.cliente_id === cliente) : baixas;
   const aConferir = casos.filter((c) => c.fase === "confirma");
   const mes = hoje.slice(0, 7);
   const pagosNoMes = casos.filter((c) => c.fase === "pago" && (c.encerrado_em ?? "").startsWith(mes));
@@ -36,6 +37,15 @@ export default async function ConferenciaPage(props: PageProps<"/conferencia">) 
             ))}
             {aConferir.length === 0 && <div className="panel empty">Nenhum pagamento aguardando conferência.</div>}
           </div>
+          <div className="group-h"><h2>Baixas automáticas do Asaas</h2><span>{baixasFiltradas.length ? `${baixasFiltradas.length} nos últimos 30 dias` : "nenhuma nos últimos 30 dias"}</span></div>
+          <div className="tasks">
+            {baixasFiltradas.slice(0, 30).map((b) => (
+              <LinkCaso key={b.id} caso={{ id: b.caso_id }} className="task" {...{ "data-p": "baixa" }}>
+                <div className="stripe" /><div className="body"><div className="t">{b.devedor}</div><div className="d">{b.tipo === "parcela" ? `parcela ${b.parcela_n}/${b.parcelas}` : b.tipo} · pago em {b.pago_em ? fmtData(b.pago_em.slice(0, 10)) : "—"}</div></div>
+                <div className="side"><span className="cl">{clientes[b.cliente_id]?.nome_curto}</span><b className="num">{brl(b.valor_pago ?? b.valor, false)}</b></div>
+              </LinkCaso>
+            ))}
+          </div>
         </div>
         <div className="panel">
           <div className="panel-head"><h2>Fechamento de {mes.split("-").reverse().join("/")}</h2><p>casos encerrados como pagos no mês</p></div>
@@ -48,7 +58,7 @@ export default async function ConferenciaPage(props: PageProps<"/conferencia">) 
               </tbody>
             </table>
           </div>
-          <p className="meta" style={{ marginTop: 14 }}>Com o split do Asaas ativo (etapa 3), o êxito cai direto na conta do escritório e esta tabela vira só conferência.</p>
+          <p className="meta" style={{ marginTop: 14 }}>Boletos pagos no Asaas baixam sozinhos e encerram o caso. Com o split (próxima etapa), o êxito cai direto na conta do escritório.</p>
         </div>
       </div>
     </>

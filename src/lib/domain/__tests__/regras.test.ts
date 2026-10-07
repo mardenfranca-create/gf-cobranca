@@ -27,7 +27,7 @@ function caso(over: Partial<Caso> = {}): Caso {
     id: over.id ?? "c1", cliente_id: "wrj", devedor: "Fulano", documento: "123.456.789-09", documento_digits: "12345678909", referencia: "Mensalidades", detalhe: null,
     valor_original: 1000, valor_atualizado: 1000, valor_fonte: "planilha", fase: "neg", fase_nota: "Cobrança inicial", responsavel: "Ana Paula",
     proxima_data: "2026-10-10", proxima_tipo: "recontatar", proxima_nota: "Recontatar", proxima_auto: true,
-    exc_tipo: null, exc_motivo: null, exc_desde: null, exc_revisao: null, telefone: null, email: null, processo: null, acordo: null, origem: null,
+    exc_tipo: null, exc_motivo: null, exc_desde: null, exc_revisao: null, telefone: null, email: null, processo: null, acordo: null, origem: null, asaas_customer_id: null,
     pendencias: [], entrada_em: "2026-09-01", ultima_mov_em: "2026-10-01T12:00:00Z", encerrado_em: null, ...over,
   };
 }

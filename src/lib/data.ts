@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Caso, Cliente, Evento, Parcela, Proposta, ReguaItem } from "@/lib/domain/types";
+import type { Caso, Cliente, Cobranca, Evento, Parcela, Proposta, ReguaItem } from "@/lib/domain/types";
 
 /** Leituras de dados da mesa. Todas passam pelo RLS do usuário logado. */
 
@@ -32,16 +32,18 @@ export async function listaCasos(filtro: { cliente?: string | null; abertos?: bo
   return data as Caso[];
 }
 
-export async function casoPorId(id: string): Promise<{ caso: Caso; eventos: Evento[]; parcelas: Parcela[]; propostas: Proposta[] } | null> {
+export async function casoPorId(id: string): Promise<{ caso: Caso; eventos: Evento[]; parcelas: Parcela[]; propostas: Proposta[]; cobrancas: Cobranca[] } | null> {
   const sb = await supabaseServer();
   const { data: caso } = await sb.from("casos").select("*").eq("id", id).maybeSingle();
   if (!caso) return null;
-  const [{ data: eventos }, { data: parcelas }, { data: propostas }] = await Promise.all([
+  const [{ data: eventos }, { data: parcelas }, { data: propostas }, { data: cobrancas }] = await Promise.all([
     sb.from("eventos").select("*").eq("caso_id", id).order("data", { ascending: false }).limit(200),
     sb.from("parcelas").select("*").eq("caso_id", id).order("vencimento"),
     sb.from("propostas").select("*").eq("caso_id", id).order("enviada_em", { ascending: false }),
+    sb.from("cobrancas").select("*").eq("caso_id", id).order("vencimento"),
   ]);
-  return { caso: caso as Caso, eventos: (eventos ?? []) as Evento[], parcelas: (parcelas ?? []) as Parcela[], propostas: (propostas ?? []) as Proposta[] };
+  // cobrancas pode falhar se a migration 0003 ainda não rodou: a página não cai por isso.
+  return { caso: caso as Caso, eventos: (eventos ?? []) as Evento[], parcelas: (parcelas ?? []) as Parcela[], propostas: (propostas ?? []) as Proposta[], cobrancas: (cobrancas ?? []) as Cobranca[] };
 }
 
 export async function parcelasDosCasos(ids: string[]): Promise<Record<string, { referencia: string; vencimento: string }[]>> {
@@ -89,4 +91,16 @@ export async function listaAjustes(cliente_id: string, limite = 20): Promise<Aju
     throw error;
   }
   return (data ?? []) as Ajuste[];
+}
+
+/** Baixas automáticas recebidas do Asaas nos últimos N dias (para a Conferência). */
+export async function baixasAsaas(dias = 30): Promise<(Cobranca & { devedor: string; cliente_id: string })[]> {
+  const sb = await supabaseServer();
+  const desde = new Date(Date.now() - dias * 86400000).toISOString();
+  const { data, error } = await sb.from("cobrancas").select("*").in("status", ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]).gte("pago_em", desde).order("pago_em", { ascending: false }).limit(200);
+  if (error || !data?.length) return [];
+  const ids = [...new Set(data.map((c) => c.caso_id))];
+  const { data: casos } = await sb.from("casos").select("id, devedor, cliente_id").in("id", ids);
+  const m = Object.fromEntries((casos ?? []).map((c) => [c.id, c]));
+  return (data as Cobranca[]).map((c) => ({ ...c, devedor: m[c.caso_id]?.devedor ?? "—", cliente_id: m[c.caso_id]?.cliente_id ?? "" }));
 }

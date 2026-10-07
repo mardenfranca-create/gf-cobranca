@@ -1,4 +1,5 @@
 import { supabaseEnv } from "@/lib/config/supabase-env";
+import { asaasEnv } from "@/lib/asaas";
 
 /** Página pública de diagnóstico de configuração. Não expõe segredos: só o host da URL e o prefixo da chave. */
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ function Linha({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
 
 export default async function Diagnostico() {
   const env = supabaseEnv();
+  const asaas = asaasEnv();
   const urlOk = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(env.url);
   const anonTipo = env.anon.startsWith("eyJ") ? "JWT (anon legada)" : env.anon.startsWith("sb_publishable_") ? "publishable (nova)" : env.anon ? "formato não reconhecido" : "vazia";
   let auth = "não testado";
@@ -34,6 +36,11 @@ export default async function Diagnostico() {
         <Linha k="NEXT_PUBLIC_SUPABASE_ANON_KEY" v={env.anon ? `${env.anon.slice(0, 12)}… (${env.anon.length} caracteres) · ${anonTipo}` : "(vazia)"} ok={env.anon.length > 20} />
         <Linha k="SUPABASE_SERVICE_ROLE_KEY" v={process.env.SUPABASE_SERVICE_ROLE_KEY ? "definida" : "não definida (só necessária para scripts)"} />
         <Linha k="Teste de autenticação" v={auth} ok={auth.startsWith("OK")} />
+        <h2 style={{ margin: "20px 0 8px" }}>Asaas</h2>
+        <Linha k="ASAAS_API_KEY" v={asaas.ok ? `definida (${asaas.key.slice(0, 10)}…)` : "não definida: emissão de boletos desligada"} ok={asaas.ok} />
+        <Linha k="ASAAS_ENV" v={`${asaas.env} → ${asaas.base}`} ok={asaas.env === "production" || asaas.env === "sandbox"} />
+        <Linha k="ASAAS_WEBHOOK_TOKEN" v={asaas.webhookOk ? "definido" : "não definido: webhook recusa chamadas"} ok={asaas.webhookOk} />
+        <Linha k="URL do webhook" v="https://SEU-DOMINIO/api/asaas/webhook (configurar no painel do Asaas com o mesmo token)" />
         <p className="meta" style={{ marginTop: 16 }}>Alterou uma variável na Vercel? Só vale após <b>Redeploy</b>. Esta página não mostra chaves completas.</p>
       </div>
     </main>
