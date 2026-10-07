@@ -1,18 +1,19 @@
 -- gf-cobranca · schema inicial
+-- Reexecutável: pode ser colado e rodado de novo sem erro e sem perder dados.
 -- Regra de ouro (no banco, não na tela): nenhum caso aberto sem responsável, próxima ação e data.
 -- Eventos são imutáveis. Importações são idempotentes por hash.
 
 create extension if not exists pgcrypto;
 
 -- ---------- enums ----------
-create type papel as enum ('admin', 'operador', 'cliente');
-create type fase as enum ('regua', 'neg', 'acordo', 'quebra', 'analise', 'protesto', 'judicial', 'confirma', 'pago', 'devolvido');
-create type tipo_followup as enum ('notif', 'promessa', 'recontatar', 'acordo', 'judicial', 'decidir');
-create type tipo_excecao as enum ('nao_cobrar', 'sem_contrato', 'aguardando', 'negociando', 'contestacao', 'prescrito');
-create type status_proposta as enum ('pending', 'approved', 'rejected', 'closed');
+do $$ begin create type papel as enum ('admin', 'operador', 'cliente'); exception when duplicate_object then null; end $$;
+do $$ begin create type fase as enum ('regua', 'neg', 'acordo', 'quebra', 'analise', 'protesto', 'judicial', 'confirma', 'pago', 'devolvido'); exception when duplicate_object then null; end $$;
+do $$ begin create type tipo_followup as enum ('notif', 'promessa', 'recontatar', 'acordo', 'judicial', 'decidir'); exception when duplicate_object then null; end $$;
+do $$ begin create type tipo_excecao as enum ('nao_cobrar', 'sem_contrato', 'aguardando', 'negociando', 'contestacao', 'prescrito'); exception when duplicate_object then null; end $$;
+do $$ begin create type status_proposta as enum ('pending', 'approved', 'rejected', 'closed'); exception when duplicate_object then null; end $$;
 
 -- ---------- clientes credores ----------
-create table clientes (
+create table if not exists clientes (
   id          text primary key,                 -- slug estável: 'wrj', 'lobe', 'recmed'
   nome        text not null,
   nome_curto  text not null,
@@ -26,7 +27,7 @@ create table clientes (
 );
 
 -- ---------- perfis (1:1 com auth.users) ----------
-create table perfis (
+create table if not exists perfis (
   id          uuid primary key references auth.users(id) on delete cascade,
   nome        text not null,
   papel       papel not null default 'operador',
@@ -37,7 +38,7 @@ create table perfis (
 );
 
 -- ---------- régua (global; etapa 3 permite por cliente) ----------
-create table regua (
+create table if not exists regua (
   chave   text primary key,
   rotulo  text not null,
   dias    int not null check (dias >= 0),
@@ -54,10 +55,11 @@ insert into regua (chave, rotulo, dias, nota, ordem) values
  ('analise',    'Decisão de judicializar ou devolver',                          15, 'Decidir: judicializar ou devolver', 7),
  ('protesto',   'Prazo do protesto em cartório',                                10, 'Fim do prazo do protesto em cartório', 8),
  ('judicial',   'Conferência de andamento judicial',                            90, 'Conferir andamento no Astrea', 9),
- ('excecao',    'Revisão de exceção (não cobrar, aguardando orientação)',       30, 'Revisar exceção', 10);
+ ('excecao',    'Revisão de exceção (não cobrar, aguardando orientação)',       30, 'Revisar exceção', 10)
+on conflict (chave) do nothing;
 
 -- ---------- casos (uma dívida consolidada por cliente + devedor) ----------
-create table casos (
+create table if not exists casos (
   id              uuid primary key default gen_random_uuid(),
   cliente_id      text not null references clientes(id),
   devedor         text not null,
@@ -97,14 +99,14 @@ create table casos (
   constraint excecao_coerente check ((exc_tipo is null and exc_desde is null and exc_revisao is null) or (exc_tipo is not null and exc_desde is not null and exc_revisao is not null)),
   constraint caso_encerrado_tem_data check ((fase in ('pago','devolvido')) = (encerrado_em is not null))
 );
-create index casos_cliente_fase on casos (cliente_id, fase);
-create index casos_proxima on casos (proxima_data) where fase not in ('pago','devolvido');
+create index if not exists casos_cliente_fase on casos (cliente_id, fase);
+create index if not exists casos_proxima on casos (proxima_data) where fase not in ('pago','devolvido');
 -- cadastro único: um caso ABERTO por cliente + documento
-create unique index casos_unico_aberto on casos (cliente_id, documento_digits)
+create unique index if not exists casos_unico_aberto on casos (cliente_id, documento_digits)
   where fase not in ('pago','devolvido') and documento_digits <> '';
 
 -- ---------- parcelas consolidadas no caso ----------
-create table parcelas (
+create table if not exists parcelas (
   id          uuid primary key default gen_random_uuid(),
   caso_id     uuid not null references casos(id) on delete cascade,
   referencia  text not null,
@@ -118,7 +120,7 @@ create table parcelas (
 );
 
 -- ---------- eventos (histórico imutável) ----------
-create table eventos (
+create table if not exists eventos (
   id             uuid primary key default gen_random_uuid(),
   caso_id        uuid not null references casos(id) on delete cascade,
   data           timestamptz not null default now(),
@@ -129,17 +131,18 @@ create table eventos (
   visivel_cliente boolean not null default true,
   dados          jsonb
 );
-create index eventos_caso_data on eventos (caso_id, data desc);
+create index if not exists eventos_caso_data on eventos (caso_id, data desc);
 
 create or replace function bloqueia_alteracao_evento() returns trigger language plpgsql as $$
 begin
   raise exception 'Eventos são imutáveis. Registre um novo evento em vez de alterar ou apagar.';
 end $$;
+drop trigger if exists eventos_imutaveis on eventos;
 create trigger eventos_imutaveis before update or delete on eventos
   for each row execute function bloqueia_alteracao_evento();
 
 -- ---------- propostas de acordo ----------
-create table propostas (
+create table if not exists propostas (
   id            uuid primary key default gen_random_uuid(),
   caso_id       uuid not null references casos(id) on delete cascade,
   desconto_pct  numeric(5,2) not null,
@@ -155,7 +158,7 @@ create table propostas (
 );
 
 -- ---------- importações (idempotentes) ----------
-create table importacoes (
+create table if not exists importacoes (
   id          uuid primary key default gen_random_uuid(),
   cliente_id  text references clientes(id),
   origem      text not null,                       -- 'planilha' | 'trello'
@@ -171,6 +174,7 @@ create table importacoes (
 -- ---------- atualizado_em ----------
 create or replace function toca_atualizado_em() returns trigger language plpgsql as $$
 begin new.atualizado_em = now(); return new; end $$;
+drop trigger if exists casos_atualizado on casos;
 create trigger casos_atualizado before update on casos for each row execute function toca_atualizado_em();
 
 -- ---------- helpers de autorização ----------
@@ -195,38 +199,59 @@ alter table propostas   enable row level security;
 alter table importacoes enable row level security;
 
 -- perfis: cada um lê o próprio; admin lê e gerencia todos
+drop policy if exists perfis_self on perfis;
 create policy perfis_self on perfis for select using (id = auth.uid() or meu_papel() = 'admin');
+drop policy if exists perfis_admin on perfis;
 create policy perfis_admin on perfis for all using (meu_papel() = 'admin') with check (meu_papel() = 'admin');
 
 -- clientes: equipe lê e admin edita; cliente lê só o seu
+drop policy if exists clientes_equipe_sel on clientes;
 create policy clientes_equipe_sel on clientes for select using (e_equipe() or id = meu_cliente());
+drop policy if exists clientes_admin_mod on clientes;
 create policy clientes_admin_mod on clientes for all using (meu_papel() = 'admin') with check (meu_papel() = 'admin');
 -- cliente pode ajustar as próprias alçadas (coluna limites) — controlado pela server action
+drop policy if exists clientes_cliente_upd on clientes;
 create policy clientes_cliente_upd on clientes for update using (id = meu_cliente()) with check (id = meu_cliente());
 
 -- régua: equipe lê, admin edita
+drop policy if exists regua_sel on regua;
 create policy regua_sel on regua for select using (e_equipe());
+drop policy if exists regua_admin on regua;
 create policy regua_admin on regua for all using (meu_papel() = 'admin') with check (meu_papel() = 'admin');
 
 -- casos: equipe tudo; cliente lê os seus e só altera o que a server action permitir (informar pagamento)
+drop policy if exists casos_equipe on casos;
 create policy casos_equipe on casos for all using (e_equipe()) with check (e_equipe());
+drop policy if exists casos_cliente_sel on casos;
 create policy casos_cliente_sel on casos for select using (cliente_id = meu_cliente());
+drop policy if exists casos_cliente_upd on casos;
 create policy casos_cliente_upd on casos for update using (cliente_id = meu_cliente()) with check (cliente_id = meu_cliente());
 
+drop policy if exists parcelas_equipe on parcelas;
 create policy parcelas_equipe on parcelas for all using (e_equipe()) with check (e_equipe());
+drop policy if exists parcelas_cliente on parcelas;
 create policy parcelas_cliente on parcelas for select using (exists (select 1 from casos c where c.id = caso_id and c.cliente_id = meu_cliente()));
 
 -- eventos: inserção por equipe e cliente; leitura do cliente só do que é visível
+drop policy if exists eventos_equipe_sel on eventos;
 create policy eventos_equipe_sel on eventos for select using (e_equipe());
+drop policy if exists eventos_equipe_ins on eventos;
 create policy eventos_equipe_ins on eventos for insert with check (e_equipe());
+drop policy if exists eventos_cliente_sel on eventos;
 create policy eventos_cliente_sel on eventos for select using (visivel_cliente and exists (select 1 from casos c where c.id = caso_id and c.cliente_id = meu_cliente()));
+drop policy if exists eventos_cliente_ins on eventos;
 create policy eventos_cliente_ins on eventos for insert with check (exists (select 1 from casos c where c.id = caso_id and c.cliente_id = meu_cliente()));
 
+drop policy if exists propostas_equipe on propostas;
 create policy propostas_equipe on propostas for all using (e_equipe()) with check (e_equipe());
+drop policy if exists propostas_cliente_sel on propostas;
 create policy propostas_cliente_sel on propostas for select using (exists (select 1 from casos c where c.id = caso_id and c.cliente_id = meu_cliente()));
+drop policy if exists propostas_cliente_upd on propostas;
 create policy propostas_cliente_upd on propostas for update using (exists (select 1 from casos c where c.id = caso_id and c.cliente_id = meu_cliente()));
 
+drop policy if exists importacoes_equipe on importacoes;
 create policy importacoes_equipe on importacoes for all using (e_equipe()) with check (e_equipe());
+drop policy if exists importacoes_cliente on importacoes;
 create policy importacoes_cliente on importacoes for select using (cliente_id = meu_cliente());
 
 -- ---------- perfil automático ao criar usuário ----------
@@ -243,5 +268,15 @@ begin
   on conflict (id) do nothing;
   return new;
 end $$;
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function cria_perfil();
+
+-- ---------- perfis para usuários criados antes do gatilho existir ----------
+insert into perfis (id, nome, papel, cliente_id)
+select u.id,
+       coalesce(u.raw_user_meta_data->>'nome', split_part(u.email, '@', 1)),
+       coalesce((u.raw_user_meta_data->>'papel')::papel, 'operador'),
+       nullif(u.raw_user_meta_data->>'cliente_id', '')
+from auth.users u
+where not exists (select 1 from perfis p where p.id = u.id);
