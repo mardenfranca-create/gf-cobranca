@@ -1,5 +1,6 @@
 import { supabaseEnv } from "@/lib/config/supabase-env";
 import { asaasEnv } from "@/lib/asaas";
+import { whatsappEnv } from "@/lib/whatsapp";
 
 /** Página pública de diagnóstico de configuração. Não expõe segredos: só o host da URL e o prefixo da chave. */
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ function Linha({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
 export default async function Diagnostico() {
   const env = supabaseEnv();
   const asaas = asaasEnv();
+  const wa = whatsappEnv();
   const urlOk = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(env.url);
   const anonTipo = env.anon.startsWith("eyJ") ? "JWT (anon legada)" : env.anon.startsWith("sb_publishable_") ? "publishable (nova)" : env.anon ? "formato não reconhecido" : "vazia";
   let auth = "não testado";
@@ -41,6 +43,13 @@ export default async function Diagnostico() {
         <Linha k="ASAAS_ENV" v={`${asaas.env} → ${asaas.base}`} ok={asaas.env === "production" || asaas.env === "sandbox"} />
         <Linha k="ASAAS_WEBHOOK_TOKEN" v={asaas.webhookOk ? "definido" : "não definido: webhook recusa chamadas"} ok={asaas.webhookOk} />
         <Linha k="URL do webhook" v="https://SEU-DOMINIO/api/asaas/webhook (configurar no painel do Asaas com o mesmo token)" />
+        <h2 style={{ margin: "20px 0 8px" }}>WhatsApp (Meta Cloud API)</h2>
+        <Linha k="WHATSAPP_TOKEN" v={wa.token ? `definido (${wa.token.slice(0, 6)}…)` : "não definido: envio desligado"} ok={wa.token.length > 20} />
+        <Linha k="WHATSAPP_PHONE_NUMBER_ID" v={wa.phoneId || "não definido"} ok={/^\d{6,}$/.test(wa.phoneId)} />
+        <Linha k="WHATSAPP_VERIFY_TOKEN / APP_SECRET" v={wa.webhookOk ? "definidos" : "faltando: webhook de status/respostas não funciona"} ok={wa.webhookOk} />
+        <Linha k="Régua automática" v={wa.reguaAuto ? "LIGADA (envia lembretes sozinha nos dias úteis às 9h)" : "desligada (o cron só simula)"} ok={wa.reguaAuto || undefined} />
+        <Linha k="CRON_SECRET" v={process.env.CRON_SECRET ? "definido" : "não definido: o cron da régua recusa chamadas"} ok={!!process.env.CRON_SECRET} />
+        <Linha k="URL do webhook" v={`https://SEU-DOMINIO/api/whatsapp/webhook (API ${wa.version})`} />
         <p className="meta" style={{ marginTop: 16 }}>Alterou uma variável na Vercel? Só vale após <b>Redeploy</b>. Esta página não mostra chaves completas.</p>
       </div>
     </main>

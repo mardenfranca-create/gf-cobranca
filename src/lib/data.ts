@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Caso, Cliente, Cobranca, Evento, Parcela, Proposta, ReguaItem } from "@/lib/domain/types";
+import type { Caso, Cliente, Cobranca, Evento, Mensagem, Parcela, Proposta, ReguaItem } from "@/lib/domain/types";
 
 /** Leituras de dados da mesa. Todas passam pelo RLS do usuário logado. */
 
@@ -32,18 +32,19 @@ export async function listaCasos(filtro: { cliente?: string | null; abertos?: bo
   return data as Caso[];
 }
 
-export async function casoPorId(id: string): Promise<{ caso: Caso; eventos: Evento[]; parcelas: Parcela[]; propostas: Proposta[]; cobrancas: Cobranca[] } | null> {
+export async function casoPorId(id: string): Promise<{ caso: Caso; eventos: Evento[]; parcelas: Parcela[]; propostas: Proposta[]; cobrancas: Cobranca[]; mensagens: Mensagem[] } | null> {
   const sb = await supabaseServer();
   const { data: caso } = await sb.from("casos").select("*").eq("id", id).maybeSingle();
   if (!caso) return null;
-  const [{ data: eventos }, { data: parcelas }, { data: propostas }, { data: cobrancas }] = await Promise.all([
+  const [{ data: eventos }, { data: parcelas }, { data: propostas }, { data: cobrancas }, { data: mensagens }] = await Promise.all([
     sb.from("eventos").select("*").eq("caso_id", id).order("data", { ascending: false }).limit(200),
     sb.from("parcelas").select("*").eq("caso_id", id).order("vencimento"),
     sb.from("propostas").select("*").eq("caso_id", id).order("enviada_em", { ascending: false }),
     sb.from("cobrancas").select("*").eq("caso_id", id).order("vencimento"),
+    sb.from("mensagens").select("*").eq("caso_id", id).order("criado_em", { ascending: false }).limit(50),
   ]);
   // cobrancas pode falhar se a migration 0003 ainda não rodou: a página não cai por isso.
-  return { caso: caso as Caso, eventos: (eventos ?? []) as Evento[], parcelas: (parcelas ?? []) as Parcela[], propostas: (propostas ?? []) as Proposta[], cobrancas: (cobrancas ?? []) as Cobranca[] };
+  return { caso: caso as Caso, eventos: (eventos ?? []) as Evento[], parcelas: (parcelas ?? []) as Parcela[], propostas: (propostas ?? []) as Proposta[], cobrancas: (cobrancas ?? []) as Cobranca[], mensagens: (mensagens ?? []) as Mensagem[] };
 }
 
 export async function parcelasDosCasos(ids: string[]): Promise<Record<string, { referencia: string; vencimento: string }[]>> {

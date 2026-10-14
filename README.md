@@ -14,7 +14,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 |---|---|---|
 | 1. Núcleo | Login da equipe, casos, régua configurável, fila, agenda, quadro, exceções, importação com reconciliação, carga do Trello | em produção |
 | 2. Portal do cliente | Login por cliente, visão geral, carteira, aprovação de propostas fora da alçada, envio de planilha, informar pagamento, alçadas com registro de alteração | nesta versão |
-| 3. Integrações | **Asaas (boleto/Pix e baixa automática por webhook): nesta versão.** Split, WhatsApp oficial e exportação do Astrea: a seguir | em andamento |
+| 3. Integrações | Asaas (boleto/Pix e baixa automática): em produção. **WhatsApp oficial (Meta Cloud API): nesta versão.** Split e exportação do Astrea: a seguir | em andamento |
 | 4. Financeiro | Fechamento de êxito, comissão, conciliação | |
 
 ## Colocar no ar (primeira vez)
@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2) e `0003_asaas.sql` (etapa 3). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2) `0003_asaas.sql` e `0004_whatsapp.sql` (etapa 3). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -57,6 +57,7 @@ from auth.users u where u.id = p.id and u.email = 'financeiro@wrj.com.br';
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (só servidor)
    - `ASAAS_API_KEY`, `ASAAS_ENV`, `ASAAS_WEBHOOK_TOKEN` (etapa 3, ver seção Asaas)
+   - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_REGUA_AUTOMATICA`, `CRON_SECRET` (etapa 3, ver seção WhatsApp)
 3. Deploy. Abra a URL e entre com um usuário da equipe.
 
 ### 4. Carga da carteira do Trello
@@ -104,6 +105,7 @@ scripts/               carga inicial
 - **ajustes_cliente**: registro imutável de quem alterou alçadas, contato e honorários (cliente ou admin).
 - **cobrancas**: boletos/Pix emitidos no Asaas (um por parcela), com status e links.
 - **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
+- **mensagens**: WhatsApp enviado (modelo, texto, status de entrega) e recebido (resposta do devedor).
 - **regua**: prazos configuráveis que governam a próxima ação.
 
 ## Portal do cliente (etapa 2)
@@ -136,7 +138,7 @@ A cobrança é emitida da conta Asaas **do escritório**: o devedor paga ao Asaa
    - Versão da API: v3. Fila ativa.
 3. Redeploy na Vercel. Abra `/diagnostico`: a seção Asaas tem que estar toda verde. `GET /api/asaas/webhook` responde `configurado: true`.
 4. Teste no sandbox: num caso com CPF/CNPJ e valor, *Emitir boleto/Pix no Asaas*. No painel do sandbox, marque a cobrança como recebida. Em segundos o caso vai para "Pago" com o evento "Pagamento confirmado pelo Asaas".
-5. Produção: troque `ASAAS_API_KEY` pela chave da conta real e `ASAAS_ENV` para `production`; cadastre o webhook de novo na conta real. Redeploy.
+5. Produção: antes de trocar a chave, rode no SQL Editor `update casos set asaas_customer_id = null where asaas_customer_id is not null;` (apaga os ids de devedor criados no sandbox). Depois troque `ASAAS_API_KEY` pela chave da conta real e `ASAAS_ENV` para `production`; cadastre o webhook de novo na conta real. Redeploy.
 
 ### O que acontece
 
@@ -150,3 +152,46 @@ A cobrança é emitida da conta Asaas **do escritório**: o devedor paga ao Asaa
 Eventos repetidos são ignorados pelo `id`. Webhook sem token ou com token errado recebe 401. Se o webhook atrasar, "Sincronizar" na cobrança consulta o Asaas na hora.
 
 Nota: os nomes de cabeçalho (`access_token`, `asaas-access-token`) e as URLs base seguem a API v3; se o Asaas mudar algo, `ASAAS_BASE_URL` sobrescreve a URL sem mexer em código.
+
+## WhatsApp oficial (etapa 3): lembretes da régua, link do boleto e respostas do devedor
+
+Usa a **WhatsApp Cloud API da Meta** com um número dedicado à cobrança. Só modelos pré-aprovados saem do sistema; respostas do devedor entram no histórico do caso e viram tarefa para o responsável no mesmo dia. "SAIR" bloqueia mensagens automáticas para aquele devedor.
+
+### Pré-requisitos na Meta (fora do código)
+
+1. **Meta Business Manager** com a empresa verificada (CNPJ e documento).
+2. **App no Meta for Developers** do tipo Business com o produto WhatsApp adicionado.
+3. **Número dedicado** (chip novo). Um número na Cloud API não pode continuar no app WhatsApp Business.
+4. **Usuário do sistema** com token permanente e permissão `whatsapp_business_messaging` e `whatsapp_business_management`.
+5. **Modelos aprovados**, categoria *Utilidade*, idioma *Português (BR)*, com os nomes e corpos exatos abaixo. Variáveis `{{n}}` em ordem.
+
+| Nome | Corpo |
+|---|---|
+| `gf_lembrete_1` | Olá, {{1}}. Aqui é o Gontijo Freitas Advogados, em nome de {{2}}. Consta em aberto {{3}}, referente a {{4}}. Se já pagou, desconsidere esta mensagem. Para regularizar ou negociar, é só responder aqui. Para não receber mais avisos, responda SAIR. |
+| `gf_lembrete_2` | {{1}}, ainda não localizamos o pagamento de {{2}} ({{3}}) devido a {{4}}. Podemos facilitar com desconto ou parcelamento: responda esta mensagem e um atendente do Gontijo Freitas fala com você. Para não receber avisos, responda SAIR. |
+| `gf_boleto` | {{1}}, segue a cobrança de {{2}} referente a {{3}} ({{4}}), com vencimento em {{5}}. Pague por boleto ou Pix pelo link: {{6}}. Dúvidas, responda aqui. |
+| `gf_vencimento` | {{1}}, lembrete: a parcela de {{2}} do seu acordo com {{3}} vence em {{4}}. Pague pelo link: {{5}}. Se já pagou, desconsidere. |
+| `gf_acordo_quebrado` | {{1}}, a parcela de {{2}} do seu acordo com {{3}} venceu em {{4}} e não foi localizada. Regularize pelo link {{5}} ou responda aqui para renegociar antes que o acordo seja cancelado. |
+
+Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · referência Mensalidade mar/2026 · credor Colégio WRJ · data 20/10/2026 · link https://www.asaas.com/i/abc123.
+
+### Configurar (uma vez)
+
+1. Vercel: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` (inventado), `WHATSAPP_APP_SECRET`, `CRON_SECRET` (inventado), `WHATSAPP_REGUA_AUTOMATICA=false`. Redeploy.
+2. Meta for Developers → app → WhatsApp → Configuração → **Webhook**: URL `https://SEU-DOMINIO/api/whatsapp/webhook`, token = `WHATSAPP_VERIFY_TOKEN`. Clique em verificar. Assine o campo **messages**.
+3. `/diagnostico`: seção WhatsApp verde. `GET /api/whatsapp/webhook` responde `configurado: true`.
+4. Teste: num caso com celular, *Enviar WhatsApp* → modelo 1º lembrete → o status muda para Entregue/Lida conforme o webhook chega; responda pelo celular e veja a resposta no caso e a tarefa na Fila.
+5. Quando estiver confortável, `WHATSAPP_REGUA_AUTOMATICA=true` + Redeploy liga os lembretes automáticos.
+
+### O que roda sozinho
+
+- **Cron dias úteis 9h (Brasília)** `GET /api/cron/regua` com `Authorization: Bearer CRON_SECRET` (a Vercel envia). Casos em "Régua automática": 1º lembrete em D+`notif1`, 2º em D+`notif1`+`recontato` (dias da aba Clientes → Régua). Depois a mesa assume. Parcelas de acordo no Asaas: lembrete 3 dias antes do vencimento. Com a régua desligada, o cron só simula: `/api/cron/regua?simular=1` mostra o que enviaria.
+- **Emissão no Asaas** com a caixa "Enviar o link por WhatsApp" marcada manda o modelo `gf_boleto` na hora.
+- **Webhook**: status de entrega (enviada, entregue, lida, falhou) e respostas. Resposta vira evento visível ao cliente e tarefa "responder hoje". "SAIR" marca opt-out.
+
+### Regras de proteção
+
+- Nunca envia sem celular válido com DDD, com opt-out, com exceção ativa ou fora da fase "Régua automática" (lembretes).
+- Cada lembrete sai uma vez por caso; atraso de dias não gera envio duplo.
+- Webhook exige assinatura `X-Hub-Signature-256` válida (App Secret). Sem ela, 401.
+- Texto enviado fica no histórico do caso, visível ao cliente no portal.
