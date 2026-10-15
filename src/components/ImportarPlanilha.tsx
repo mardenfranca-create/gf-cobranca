@@ -54,7 +54,7 @@ export function ImportarPlanilha({ clientes, clienteFixo, acoes, titulo }: { cli
                 <td className="num">{l.linha}</td><td>{nome(l.cliente_id) || l.cliente}</td>
                 <td><div className="main">{l.devedor || "—"}</div><div className="meta">{l.referencia}{l.situacao ? " · " + l.situacao : ""}</div></td>
                 <td className="r num">{l.valor == null ? "—" : brl(l.valor)}</td><td className="num">{l.vencimento ? fmtData(l.vencimento) : "—"}</td>
-                <td>{l.erros.length ? <span className="err">{l.erros.join("; ")}</span> : <><span className={K[l.kind][1]}>{K[l.kind][0]}</span>{l.caso_fase && <div className="meta">caso existente: {l.caso_fase}</div>}</>}</td>
+                <td>{l.erros.length ? <span className="err">{l.erros.join("; ")}</span> : <><span className={K[l.kind][1]}>{l.kind === "consolida" && !l.caso_id ? `Mesmo devedor da linha ${l.grupo_linha}: parcela somada ao caso novo` : K[l.kind][0]}</span>{l.caso_fase && <div className="meta">caso existente: {l.caso_fase}</div>}</>}</td>
               </tr>))}</tbody>
           </table></div>
         </form>
