@@ -47,6 +47,16 @@ export async function previaPlanilhaCliente(fd: FormData): Promise<Previa> {
 }
 
 async function previaCore(fd: FormData, clienteFixo: string | null): Promise<Previa> {
+  try {
+    return await previaInterna(fd, clienteFixo);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("previaPlanilha falhou:", msg);
+    return { ok: false, erro: `Não consegui ler a planilha: ${msg}` };
+  }
+}
+
+async function previaInterna(fd: FormData, clienteFixo: string | null): Promise<Previa> {
   const file = fd.get("arquivo");
   if (!(file instanceof File) || !file.size) return { ok: false, erro: "Escolha um arquivo .xlsx ou .csv." };
   const hoje = hojeISO();
@@ -84,6 +94,16 @@ export async function aplicarPlanilhaCliente(fd: FormData): Promise<{ ok: boolea
 }
 
 async function aplicarCore(fd: FormData, u: Usuario, clienteForcado: string | null): Promise<{ ok: boolean; msg: string }> {
+  try {
+    return await aplicarInterno(fd, u, clienteForcado);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("aplicarPlanilha falhou:", msg);
+    return { ok: false, msg: `A importação parou com erro: ${msg}. O que já foi gravado permanece; envie a planilha de novo para completar (linhas já importadas não duplicam).` };
+  }
+}
+
+async function aplicarInterno(fd: FormData, u: Usuario, clienteForcado: string | null): Promise<{ ok: boolean; msg: string }> {
   const previa = JSON.parse(String(fd.get("previa"))) as Extract<Previa, { ok: true }>;
   if (clienteForcado && (previa.clienteFixo !== clienteForcado || previa.linhas.some((l) => l.cliente_id && l.cliente_id !== clienteForcado))) {
     return { ok: false, msg: "A prévia não pertence à sua carteira. Envie a planilha de novo." };
@@ -97,9 +117,22 @@ async function aplicarCore(fd: FormData, u: Usuario, clienteForcado: string | nu
   const stamp = `planilha ${previa.arquivo} de ${fmtData(hoje)}${u.papel === "cliente" ? ` (enviada pelo cliente · ${u.nome})` : ""}`;
   const n = { novos: 0, consolidados: 0, baixas: 0, excecoes: 0, ausentes: 0 };
   const ev = (caso_id: string, tipo: string, texto: string) => sb.from("eventos").insert({ caso_id, autor: u.nome, autor_id: u.id, tipo, texto, visivel_cliente: true });
+  const criadosNestaCarga: Record<number, string> = {}; // linha que abriu o caso → id do caso
+  const consolida = async (casoId: string, l: (typeof previa.linhas)[number]) => {
+    const { data: c } = await sb.from("casos").select("valor_original, valor_atualizado").eq("id", casoId).single();
+    await sb.from("parcelas").upsert({ caso_id: casoId, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! }, { onConflict: "caso_id,referencia,vencimento", ignoreDuplicates: true });
+    await sb.from("casos").update({ valor_original: (c?.valor_original ?? 0) + l.valor!, valor_atualizado: (c?.valor_atualizado ?? 0) + l.valor!, valor_fonte: "planilha (consolidado)", ultima_mov_em: new Date().toISOString() }).eq("id", casoId);
+    await ev(casoId, "importacao", `${stamp}: nova parcela em aberto (${l.referencia}, R$ ${l.valor}). Caso consolidado, régua mantida.`);
+    n.consolidados++;
+  };
 
   for (const l of previa.linhas.filter((x) => !x.erros.length && x.cliente_id)) {
     const cid = l.cliente_id!;
+    if (l.kind === "consolida" && !l.caso_id && l.grupo_linha != null) {
+      const alvo = criadosNestaCarga[l.grupo_linha];
+      if (alvo) await consolida(alvo, l);
+      continue;
+    }
     if (l.kind === "novo" || (l.kind === "excecao" && !l.caso_id)) {
       const base = { fase: "regua" as const, fase_nota: "Régua automática", ultima_mov_em: new Date().toISOString() };
       const prox = l.kind === "excecao" ? { data: addDias(hoje, regua.excecao?.dias ?? 30), tipo: "decidir" as const, nota: "Revisar exceção: Não cobrar", auto: true } : derivaProxima({ ...base, exc_tipo: null, exc_revisao: null }, regua, hoje);
@@ -109,16 +142,13 @@ async function aplicarCore(fd: FormData, u: Usuario, clienteForcado: string | nu
         ...(l.kind === "excecao" ? colunasExcecao("nao_cobrar", "Planilha: " + (l.situacao || "não cobrar"), hoje, undefined, regua) : {}),
         telefone: l.telefone || null, email: l.email || null, entrada_em: hoje, pendencias: [],
       }).select("id").single();
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(`${l.devedor} (linha ${l.linha}): ${error.message}`);
+      criadosNestaCarga[l.linha] = novo.id;
       await sb.from("parcelas").insert({ caso_id: novo.id, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! });
       await ev(novo.id, "importacao", `Caso aberto via ${stamp}. Primeira notificação agendada na régua.`);
       if (l.kind === "excecao") n.excecoes++; else n.novos++;
     } else if (l.caso_id && l.kind === "consolida") {
-      const { data: c } = await sb.from("casos").select("valor_original, valor_atualizado").eq("id", l.caso_id).single();
-      await sb.from("parcelas").upsert({ caso_id: l.caso_id, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! }, { onConflict: "caso_id,referencia,vencimento", ignoreDuplicates: true });
-      await sb.from("casos").update({ valor_original: (c?.valor_original ?? 0) + l.valor!, valor_atualizado: (c?.valor_atualizado ?? 0) + l.valor!, valor_fonte: "planilha (consolidado)", ultima_mov_em: new Date().toISOString() }).eq("id", l.caso_id);
-      await ev(l.caso_id, "importacao", `${stamp}: nova parcela em aberto (${l.referencia}, R$ ${l.valor}). Caso consolidado, régua mantida.`);
-      n.consolidados++;
+      await consolida(l.caso_id, l);
     } else if (l.caso_id && l.kind === "igual") {
       await ev(l.caso_id, "importacao", `${stamp}: parcela ${l.referencia} confirmada em aberto.`);
     } else if (l.caso_id && l.kind === "baixa") {
