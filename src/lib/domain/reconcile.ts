@@ -18,7 +18,8 @@ export type LinhaPlanilha = {
 };
 
 export type Classificacao = "novo" | "consolida" | "igual" | "baixa" | "excecao";
-export type LinhaClassificada = LinhaPlanilha & { cliente_id: string | null; caso: Caso | null; kind: Classificacao };
+/** grupo_linha: quando a linha consolida num caso NOVO aberto por outra linha desta mesma planilha, aponta para a linha que abre o caso. */
+export type LinhaClassificada = LinhaPlanilha & { cliente_id: string | null; caso: Caso | null; kind: Classificacao; grupo_linha: number | null };
 
 export type Reconciliacao = {
   linhas: LinhaClassificada[];
@@ -127,20 +128,28 @@ export function reconcilia(
     porNome[normHead(c.nome_curto)] = c.id;
     porNome[normHead(c.id)] = c.id;
   }
+  // Várias linhas do mesmo devedor na mesma planilha (uma por mensalidade) viram UM caso: a primeira abre, as demais consolidam.
+  const primeiraLinhaDoDevedor: Record<string, number> = {};
   const classificadas: LinhaClassificada[] = linhas.map((l) => {
     const cliente_id = clienteFixo ?? porNome[normHead(l.cliente)] ?? null;
     const erros = [...l.erros];
     if (!cliente_id) erros.push(l.cliente ? `cliente "${l.cliente}" não cadastrado` : 'informe o cliente (coluna "cliente" ou filtro no topo)');
     const caso = cliente_id ? casosAbertos.find((c) => isAberto(c) && c.cliente_id === cliente_id && c.documento_digits === l.documento_digits && l.documento_digits) ?? null : null;
     const sit = normHead(l.situacao);
+    const chave = cliente_id && l.documento_digits ? `${cliente_id}:${l.documento_digits}` : null;
     let kind: Classificacao;
+    let grupo_linha: number | null = null;
     if (/pag|quitad|baixa/.test(sit)) kind = "baixa";
     else if (/nao|não|suspend|cobrar|acordo_direto|negocia/.test(sit)) kind = "excecao";
     else if (caso) {
       const jaTem = (parcelasPorCaso[caso.id] ?? []).some((p) => normHead(p.referencia) === normHead(l.referencia) && p.vencimento === l.vencimento);
       kind = jaTem ? "igual" : "consolida";
+    } else if (chave && !erros.length && primeiraLinhaDoDevedor[chave] != null) {
+      kind = "consolida";
+      grupo_linha = primeiraLinhaDoDevedor[chave];
     } else kind = "novo";
-    return { ...l, erros, cliente_id, caso, kind };
+    if (kind === "novo" && chave && !erros.length) primeiraLinhaDoDevedor[chave] = l.linha;
+    return { ...l, erros, cliente_id, caso, kind, grupo_linha };
   });
   const escopo = [...new Set(classificadas.filter((l) => l.cliente_id).map((l) => l.cliente_id!))];
   const docsNaPlanilha: Record<string, Set<string>> = {};

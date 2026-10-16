@@ -111,6 +111,16 @@ describe("planilha: normalização e reconciliação", () => {
     expect(kinds.slice(0, 4)).toEqual(["novo", "consolida", "igual", "baixa"]);
     expect(rec.resumo).toMatchObject({ novos: 1, consolidados: 1, iguais: 1, baixas: 1, erros: 1 });
   });
+  it("devedor repetido na mesma planilha abre um caso só: a primeira linha abre, as demais consolidam", () => {
+    const rep = [rows[0], ["Maria", "222.333.444-05", "Mensalidade jul/2026", 800, "10/07/2026", "", "WRJ", ""], ["Maria", "222.333.444-05", "Mensalidade ago/2026", 800, "10/08/2026", "", "WRJ", ""], ["Maria", "222.333.444-05", "Mensalidade set/2026", 800, "10/09/2026", "", "WRJ", ""]];
+    const { linhas } = normalizaPlanilha(rep, HOJE);
+    const rec = reconcilia(linhas, [], {}, [WRJ], null);
+    expect(rec.linhas.map((l) => l.kind)).toEqual(["novo", "consolida", "consolida"]);
+    expect(rec.linhas[1].grupo_linha).toBe(2);
+    expect(rec.linhas[2].grupo_linha).toBe(2);
+    expect(rec.linhas[1].caso).toBeNull();
+    expect(rec.resumo).toMatchObject({ novos: 1, consolidados: 2 });
+  });
   it("caso aberto ausente da planilha é apontado, nunca apagado", () => {
     const { linhas } = normalizaPlanilha(rows, HOJE);
     const ausente = caso({ id: "c9", documento: "555.666.777-88", documento_digits: "55566677788" });
