@@ -51,7 +51,7 @@ export async function registrarContato(fd: FormData) {
       evento: { tipo: "contato", texto: `${canal}: ${resultado.toLowerCase()}.${obs ? " " + obs : ""} Próximo follow-up em ${fmtData(data)}.` },
     };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Contato registrado e próximo follow-up agendado.")}`);
 }
 
 export async function agendarFollowup(fd: FormData) {
@@ -62,7 +62,7 @@ export async function agendarFollowup(fd: FormData) {
     const nota = s(fd, "nota") || FOLLOWUPS[tipo];
     return { patch: prox({ data, tipo, nota, auto: false }), evento: { tipo: "agenda", texto: `Follow-up agendado para ${fmtData(data)}: ${nota}`, visivel_cliente: false } };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Follow-up salvo na agenda.")}`);
 }
 
 export async function atribuirResponsavel(fd: FormData) {
@@ -70,7 +70,7 @@ export async function atribuirResponsavel(fd: FormData) {
   const quem = s(fd, "responsavel");
   if (!(EQUIPE as readonly string[]).includes(quem)) throw new Error("Responsável inválido");
   await aplica(id, () => ({ patch: { responsavel: quem }, evento: { tipo: "sistema", texto: `Responsável alterado para ${quem}.`, visivel_cliente: false } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Responsável atualizado.")}`);
 }
 
 export async function marcarExcecao(fd: FormData) {
@@ -85,7 +85,7 @@ export async function marcarExcecao(fd: FormData) {
       evento: { tipo: "excecao", texto: `Exceção marcada: ${EXCECOES[tipo]}. ${motivo} Régua pausada; revisão em ${fmtData(revisao)}.` },
     };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Exceção registrada. A régua fica pausada até a data de revisão.")}`);
 }
 
 export async function retomarCobranca(fd: FormData) {
@@ -94,7 +94,7 @@ export async function retomarCobranca(fd: FormData) {
     const semExc = { ...caso, exc_tipo: null, exc_revisao: null, ultima_mov_em: new Date().toISOString() };
     return { patch: { ...colunasExcecao(null, "", hoje), ...prox(derivaProxima(semExc, regua, hoje)) }, evento: { tipo: "excecao", texto: `Exceção levantada (${caso.exc_tipo ? EXCECOES[caso.exc_tipo] : ""}). Cobrança retomada.` } };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Cobrança retomada.")}`);
 }
 
 export async function registrarProposta(fd: FormData) {
@@ -121,7 +121,7 @@ export async function registrarProposta(fd: FormData) {
       evento: { tipo: "acordo", texto: `Acordo fechado pela equipe dentro da alçada: ${termos.desconto_pct}% de desconto, entrada de ${termos.entrada_pct}%, ${termos.parcelas} parcelas de ${brl(ck.parcelaValor)}. Boletos a emitir no Asaas.` },
     }));
   }
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Proposta registrada.")}`);
 }
 
 export async function enviarProtesto(fd: FormData) {
@@ -130,7 +130,7 @@ export async function enviarProtesto(fd: FormData) {
     const just = s(fd, "justificativa");
     return { patch: { fase: "protesto", ...prox(marca(hoje, regua.protesto?.dias ?? 10, "notif", "Fim do prazo do protesto em cartório")) }, evento: { tipo: "protesto", texto: `Título enviado a protesto (CENPROT).${just ? " Justificativa: " + just : ""}` } };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Envio a protesto registrado.")}`);
 }
 
 export async function encaminharJudicial(fd: FormData) {
@@ -139,7 +139,7 @@ export async function encaminharJudicial(fd: FormData) {
     patch: { fase: "judicial", processo: "em distribuição", acordo: null, responsavel: s(fd, "advogado") || "Lucas", ...prox(marca(hoje, 30, "judicial", "Conferir distribuição e citação no Astrea")) },
     evento: { tipo: "judicial", texto: `Encaminhado ao judicial (${s(fd, "via")}). Advogado: ${s(fd, "advogado")}. Caso a abrir no Astrea.` },
   }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Caso encaminhado ao judicial.")}`);
 }
 
 export async function marcarParcelaPaga(fd: FormData) {
@@ -151,7 +151,7 @@ export async function marcarParcelaPaga(fd: FormData) {
     acordo.next = addDias(hoje, regua.acordoConf?.dias ?? 30);
     return { patch: { acordo, ...prox(marca(hoje, regua.acordoConf?.dias ?? 30, "acordo", `Conferir parcela ${acordo.paid + 1}/${acordo.parc}`)) }, evento: { tipo: "pagamento", texto: `Parcela ${acordo.paid}/${acordo.parc} do acordo confirmada.` } };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Parcela confirmada.")}`);
 }
 
 export async function marcarAcordoQuebrado(fd: FormData) {
@@ -160,37 +160,37 @@ export async function marcarAcordoQuebrado(fd: FormData) {
     patch: { fase: "quebra", ...prox(marca(hoje, regua.quebra?.dias ?? 2, "decidir", "Renegociar ou protestar")) },
     evento: { tipo: "acordo", texto: `${caso.acordo ? `Parcela ${caso.acordo.paid + 1}/${caso.acordo.parc} vencida` : "Parcela vencida"} sem pagamento. Acordo quebrado; aviso ao devedor.` },
   }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Acordo marcado como quebrado.")}`);
 }
 
 export async function devolverAoCliente(fd: FormData) {
   const id = s(fd, "caso_id");
   await aplica(id, () => ({ patch: { fase: "devolvido", ...prox(null), ...colunasExcecao(null, "", "") }, evento: { tipo: "encerramento", texto: `Devolvido ao cliente com parecer: ${s(fd, "parecer") || "sem viabilidade de cobrança."}` } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Caso devolvido ao cliente e encerrado.")}`);
 }
 
 export async function reativarCobranca(fd: FormData) {
   const id = s(fd, "caso_id");
   await aplica(id, ({ hoje }) => ({ patch: { fase: "neg", fase_nota: "Cobrança reativada", ...prox(marca(hoje, 1, "recontatar", "Retomar contato após reativação")) }, evento: { tipo: "sistema", texto: "Cobrança reativada pela equipe." } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Cobrança reativada.")}`);
 }
 
 export async function confirmarPagamento(fd: FormData) {
   const id = s(fd, "caso_id");
   await aplica(id, () => ({ patch: { fase: "pago", acordo: null, ...prox(null) }, evento: { tipo: "pagamento", texto: `Pagamento conferido (${s(fd, "onde").toLowerCase() || "extrato"}). Caso encerrado.` } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Pagamento confirmado. Caso encerrado.")}`);
 }
 
 export async function pagamentoNaoLocalizado(fd: FormData) {
   const id = s(fd, "caso_id");
   await aplica(id, ({ hoje }) => ({ patch: { fase: "neg", ...prox(marca(hoje, 1, "recontatar", "Cobrar comprovante do pagamento alegado")) }, evento: { tipo: "pagamento", texto: `Pagamento informado não localizado. ${s(fd, "motivo")} Cobrança retomada e cliente avisado.` } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Pagamento não localizado: caso devolvido à negociação.")}`);
 }
 
 export async function registrarPagamentoIntegral(fd: FormData) {
   const id = s(fd, "caso_id");
   await aplica(id, ({ caso }) => ({ patch: { fase: "pago", acordo: null, ...prox(null) }, evento: { tipo: "pagamento", texto: `Pagamento integral registrado (${brl(n(fd, "valor") || caso.valor_atualizado || 0)} · ${s(fd, "forma")}). Caso encerrado.` } }));
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Pagamento integral registrado. Caso encerrado.")}`);
 }
 
 export async function atualizarCadastro(fd: FormData) {
@@ -202,5 +202,5 @@ export async function atualizarCadastro(fd: FormData) {
     patch.pendencias = (caso.pendencias ?? []).filter((p) => !(valor && p === "sem valor") && !(doc && p === "sem CPF/CNPJ") && !((s(fd, "telefone") || s(fd, "email")) && p === "sem contato"));
     return { patch, evento: { tipo: "cadastro", texto: `Cadastro atualizado${valor ? ` · valor ${brl(valor)}` : ""}${doc ? ` · documento ${doc}` : ""}.`, visivel_cliente: false } };
   });
-  redirect(`/casos/${id}`);
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Cadastro atualizado.")}`);
 }
