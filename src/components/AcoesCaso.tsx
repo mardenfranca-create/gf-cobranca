@@ -25,7 +25,7 @@ const Sel = ({ name, opts, def }: { name: string; opts: [string, string][]; def?
   <div className="inp"><select name={name} defaultValue={def}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
 );
 
-export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsapp }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean }; whatsapp?: { ativo: boolean; temCobrancaAberta: boolean; janelaAte?: string | null } }) {
+export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsapp }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean }; whatsapp?: { ativo: boolean; temCobrancaAberta: boolean; janelaAte?: string | null /* só vem preenchido se a janela de 24h ainda está aberta */ } }) {
   const [tpl, setTpl] = useState("gf_lembrete_1");
   const [aberta, setAberta] = useState<string | null>(null);
   const H = <input type="hidden" name="caso_id" value={caso.id} />;
@@ -143,7 +143,7 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsa
       const previa = renderiza(TEMPLATES[tpl], { devedor: caso.devedor, credor: cliente.nome_curto, valor: caso.valor_atualizado, referencia: caso.referencia, data: hoje, link: "https://asaas.com/…" });
       acoes.push({ k: "whatsapp", titulo: caso.wa_optout ? "WhatsApp bloqueado (devedor pediu SAIR)" : "Enviar WhatsApp", sub: cel ? `Para ${caso.telefone}. Só modelos aprovados pela Meta; o texto vai como está na prévia.` : "Sem celular válido no cadastro. Complete o cadastro primeiro.", form: (
         <div className="act-form">
-          {!caso.wa_optout && cel && whatsapp.janelaAte && new Date(whatsapp.janelaAte).getTime() > Date.now() && (
+          {!caso.wa_optout && cel && whatsapp.janelaAte && (
             <form action={responderWhatsApp} style={{ display: "grid", gap: 10, paddingBottom: 12, borderBottom: "1px solid var(--ink-10)" }}>{H}
               <div className="verdict in">O devedor respondeu há pouco: dá para responder em texto livre até {new Date(whatsapp.janelaAte).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.</div>
               <Campo label="Resposta"><textarea name="texto" required minLength={2} placeholder="Escreva como numa conversa. O cliente vê esta mensagem no histórico." /></Campo>
