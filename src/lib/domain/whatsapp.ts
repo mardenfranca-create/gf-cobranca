@@ -81,3 +81,11 @@ export function lembreteDeHoje(caso: CasoRegua, enviados: Set<string>, hoje: str
   if (idade >= dias.notif1 + dias.recontato && enviados.has("gf_lembrete_1") && !enviados.has("gf_lembrete_2")) return "gf_lembrete_2";
   return null;
 }
+
+/** Janela de atendimento da Meta: 24h após a última mensagem recebida do devedor. Devolve o fim (ISO) se ainda está aberta; senão null. */
+export function janelaAtendimento(mensagens: { direcao: "saida" | "entrada"; criado_em: string }[], agora: Date): string | null {
+  const ultima = mensagens.filter((m) => m.direcao === "entrada").map((m) => new Date(m.criado_em).getTime()).sort((a, b) => b - a)[0];
+  if (!ultima) return null;
+  const ate = ultima + 24 * 3600 * 1000;
+  return ate > agora.getTime() ? new Date(ate).toISOString() : null;
+}
