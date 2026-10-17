@@ -145,3 +145,16 @@ describe("alçada", () => {
     expect(confereAlcada({ desconto_pct: 10, parcelas: 4, entrada_pct: 20, total: 2000 }, WRJ.limites).fora).toBe(false);
   });
 });
+
+import { janelaAtendimento } from "../whatsapp";
+describe("janela de atendimento do WhatsApp", () => {
+  const agora = new Date("2026-10-17T12:00:00Z");
+  it("aberta nas 24h após a última resposta do devedor", () => {
+    const ms = [{ direcao: "saida" as const, criado_em: "2026-10-17T11:00:00Z" }, { direcao: "entrada" as const, criado_em: "2026-10-17T10:00:00Z" }];
+    expect(janelaAtendimento(ms, agora)).toBe("2026-10-18T10:00:00.000Z");
+  });
+  it("fechada depois de 24h ou sem resposta", () => {
+    expect(janelaAtendimento([{ direcao: "entrada", criado_em: "2026-10-16T11:59:00Z" }], agora)).toBeNull();
+    expect(janelaAtendimento([{ direcao: "saida", criado_em: "2026-10-17T11:00:00Z" }], agora)).toBeNull();
+  });
+});
