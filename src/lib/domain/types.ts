@@ -91,6 +91,7 @@ export type Caso = {
   acordo: { parc: number; paid: number; next: string } | null;
   origem: { trello_url?: string; trello_list?: string; etiquetas?: string[] } | null;
   asaas_customer_id: string | null;
+  wa_optout: boolean;
   pendencias: string[];
   entrada_em: string;
   ultima_mov_em: string;
@@ -157,4 +158,25 @@ export const COBRANCA_STATUS: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "Em aberto", cls: "ph-regua" }, RECEIVED: { label: "Pago", cls: "ph-pago" }, CONFIRMED: { label: "Pago (confirmado)", cls: "ph-pago" },
   OVERDUE: { label: "Vencido", cls: "ph-quebra" }, REFUNDED: { label: "Estornado", cls: "ph-judicial" }, DELETED: { label: "Cancelado", cls: "ph-devolvido" },
   RECEIVED_IN_CASH: { label: "Baixa manual", cls: "ph-pago" }, AWAITING_RISK_ANALYSIS: { label: "Em análise", cls: "ph-confirma" },
+};
+
+export type Mensagem = {
+  id: string;
+  caso_id: string;
+  direcao: "saida" | "entrada";
+  canal: string;
+  telefone: string;
+  template: string | null;
+  texto: string;
+  wa_id: string | null;
+  status: string;
+  erro: string | null;
+  origem: string;
+  criado_por: string | null;
+  criado_em: string;
+  atualizado_em: string;
+};
+export const MENSAGEM_STATUS: Record<string, { label: string; cls: string }> = {
+  queued: { label: "Na fila", cls: "ph-regua" }, sent: { label: "Enviada", cls: "ph-regua" }, delivered: { label: "Entregue", cls: "ph-acordo" },
+  read: { label: "Lida", cls: "ph-pago" }, failed: { label: "Falhou", cls: "ph-quebra" }, received: { label: "Recebida", cls: "ph-neg" },
 };

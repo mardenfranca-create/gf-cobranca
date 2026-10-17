@@ -5,6 +5,8 @@ import { addDias } from "@/lib/domain/datas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type Proposta } from "@/lib/domain/types";
 import * as A from "@/lib/actions/casos";
 import { emitirCobranca, emitirParcelasAcordo } from "@/lib/actions/asaas";
+import { alternarOptOut, enviarWhatsApp, responderWhatsApp } from "@/lib/actions/whatsapp";
+import { normalizaCelular, renderiza, TEMPLATES } from "@/lib/domain/whatsapp";
 
 type Acao = { k: string; titulo: string; sub: string; form: ReactNode; danger?: boolean };
 
@@ -23,7 +25,8 @@ const Sel = ({ name, opts, def }: { name: string; opts: [string, string][]; def?
   <div className="inp"><select name={name} defaultValue={def}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
 );
 
-export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean } }) {
+export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsapp }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean }; whatsapp?: { ativo: boolean; temCobrancaAberta: boolean; janelaAte?: string | null } }) {
+  const [tpl, setTpl] = useState("gf_lembrete_1");
   const [aberta, setAberta] = useState<string | null>(null);
   const H = <input type="hidden" name="caso_id" value={caso.id} />;
   const acoes: Acao[] = [];
@@ -120,6 +123,7 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas }: { ca
           <Campo label="1º vencimento"><div className="inp"><input type="date" name="primeiro" defaultValue={addDias(hoje, 5)} min={hoje} /></div></Campo>
         </div>
         <div className="verdict warn">Multa de 2% e juros de 1% ao mês após o vencimento, aplicados pelo Asaas. O devedor recebe boleto e Pix por e-mail/SMS do Asaas se tiver contato cadastrado lá.</div>
+        {whatsapp?.ativo && <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}><input type="checkbox" name="whatsapp" defaultChecked={!!normalizaCelular(caso.telefone) && !caso.wa_optout} disabled={!normalizaCelular(caso.telefone) || caso.wa_optout} /> Enviar o link da 1ª cobrança por WhatsApp</label>}
         <div className="actions"><Enviar className="btn sm">Emitir no Asaas</Enviar></div>
       </form>) });
     if (podeEmitir && caso.fase !== "acordo") acoes.push({ k: "asaas_boleto", titulo: "Emitir boleto/Pix no Asaas", sub: `Cobrança única do valor em aberto. Pagou, o caso encerra sozinho.${sandbox ? " Ambiente: sandbox (teste)." : ""}`, form: (
@@ -130,8 +134,34 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas }: { ca
           <Campo label="Desconto até o vencimento"><div className="inp"><input type="number" name="desconto" min={0} max={90} defaultValue={0} /><span>%</span></div></Campo>
         </div>
         <Campo label="Descrição no boleto"><div className="inp"><input name="descricao" defaultValue={`${caso.referencia} · ${cliente.nome_curto}`} /></div></Campo>
+        {whatsapp?.ativo && <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}><input type="checkbox" name="whatsapp" defaultChecked={!!normalizaCelular(caso.telefone) && !caso.wa_optout} disabled={!normalizaCelular(caso.telefone) || caso.wa_optout} /> Enviar o link por WhatsApp ao devedor</label>}
         <div className="actions"><Enviar className="btn sm">Emitir no Asaas</Enviar></div>
       </form>) });
+    if (whatsapp?.ativo) {
+      const cel = normalizaCelular(caso.telefone);
+      const precisaCobranca = ["gf_boleto", "gf_vencimento", "gf_acordo_quebrado"].includes(tpl);
+      const previa = renderiza(TEMPLATES[tpl], { devedor: caso.devedor, credor: cliente.nome_curto, valor: caso.valor_atualizado, referencia: caso.referencia, data: hoje, link: "https://asaas.com/…" });
+      acoes.push({ k: "whatsapp", titulo: caso.wa_optout ? "WhatsApp bloqueado (devedor pediu SAIR)" : "Enviar WhatsApp", sub: cel ? `Para ${caso.telefone}. Só modelos aprovados pela Meta; o texto vai como está na prévia.` : "Sem celular válido no cadastro. Complete o cadastro primeiro.", form: (
+        <div className="act-form">
+          {!caso.wa_optout && cel && whatsapp.janelaAte && new Date(whatsapp.janelaAte).getTime() > Date.now() && (
+            <form action={responderWhatsApp} style={{ display: "grid", gap: 10, paddingBottom: 12, borderBottom: "1px solid var(--ink-10)" }}>{H}
+              <div className="verdict in">O devedor respondeu há pouco: dá para responder em texto livre até {new Date(whatsapp.janelaAte).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.</div>
+              <Campo label="Resposta"><textarea name="texto" required minLength={2} placeholder="Escreva como numa conversa. O cliente vê esta mensagem no histórico." /></Campo>
+              <div className="actions"><Enviar className="btn sm">Responder agora</Enviar></div>
+            </form>
+          )}
+          {!caso.wa_optout && cel && (
+            <form action={enviarWhatsApp} style={{ display: "grid", gap: 10 }}>{H}
+              <Campo label="Modelo"><div className="inp"><select name="template" value={tpl} onChange={(e) => setTpl(e.target.value)}>{Object.values(TEMPLATES).map((t) => <option key={t.nome} value={t.nome}>{t.rotulo}</option>)}</select></div></Campo>
+              <div className="verdict in" style={{ whiteSpace: "pre-wrap", fontWeight: 400 }}>{previa}</div>
+              {precisaCobranca && !whatsapp.temCobrancaAberta && <div className="verdict out">Este modelo usa o link de uma cobrança em aberto no Asaas. Emita o boleto primeiro.</div>}
+              <div className="actions"><button className="btn sm" type="submit" disabled={precisaCobranca && !whatsapp.temCobrancaAberta}>Enviar modelo</button></div>
+            </form>
+          )}
+          <form action={alternarOptOut} style={{ marginTop: 8 }}>{H}<Enviar className="btn ghost sm">{caso.wa_optout ? "Liberar mensagens para este devedor" : "Bloquear mensagens para este devedor"}</Enviar></form>
+        </div>
+      ) });
+    }
     if (asaas && !asaas.ativo) acoes.push({ k: "asaas_off", titulo: "Asaas não configurado", sub: "Cadastre ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN na Vercel para emitir boletos daqui.", form: <div className="act-form"><div className="verdict warn">Veja o roteiro no README, seção Asaas.</div></div> });
     if (caso.fase === "acordo") {
       acoes.push({ k: "parcela", titulo: "Marcar parcela paga", sub: caso.acordo ? `Parcela ${caso.acordo.paid + 1} de ${caso.acordo.parc}.` : "Informe o parcelamento na primeira vez.", form: (

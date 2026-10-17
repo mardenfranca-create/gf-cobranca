@@ -8,7 +8,8 @@ import { aplicaEventoCobranca } from "@/lib/asaas-efeitos";
 import { brl, fmtData, hojeISO, addDias } from "@/lib/domain/datas";
 import { planoParcelas } from "@/lib/domain/asaas";
 import { colunasProxima, marca } from "@/lib/domain/regua";
-import type { Caso, Cobranca } from "@/lib/domain/types";
+import type { Caso, Cliente, Cobranca } from "@/lib/domain/types";
+import { enviaMensagemCaso, whatsappAtivo } from "@/lib/whatsapp-envio";
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const n = (fd: FormData, k: string) => Number(String(fd.get(k) ?? "").replace(",", ".")) || 0;
@@ -41,7 +42,14 @@ export async function emitirCobranca(fd: FormData) {
     const hoje = hojeISO();
     await sb.from("casos").update({ ...colunasProxima(marca(hoje, Math.max(1, Math.round((new Date(vencimento).getTime() - new Date(hoje).getTime()) / 86400000) + 1), "promessa", `Conferir pagamento do boleto vencido em ${fmtData(vencimento)}`)), ultima_mov_em: new Date().toISOString() }).eq("id", id);
     await sb.from("eventos").insert({ caso_id: id, autor: u.nome, autor_id: u.id, tipo: "asaas", texto: `Cobrança emitida no Asaas: ${brl(valor)}, vencimento ${fmtData(vencimento)}${descontoPct ? `, ${descontoPct}% de desconto até o vencimento` : ""}. Boleto e Pix enviados ao devedor pelo Asaas.`, visivel_cliente: true, dados: { asaas_id: p.id } });
+    if (fd.get("whatsapp") === "on" && whatsappAtivo() && p.invoiceUrl) {
+      const { data: cliente } = await sb.from("clientes").select("nome_curto").eq("id", caso.cliente_id).single();
+      const r = await enviaMensagemCaso(sb, caso, (cliente ?? { nome_curto: "o credor" }) as Cliente, "gf_boleto", { valor, data: vencimento, link: p.invoiceUrl }, "asaas", u.nome);
+      revalidatePath("/", "layout");
+      volta(id, r.ok ? "Cobrança emitida e link enviado por WhatsApp." : `Cobrança emitida. WhatsApp não enviado: ${r.msg}`, true);
+    }
   } catch (e) {
+    if (e instanceof Error && /NEXT_REDIRECT/.test(e.message)) throw e;
     volta(id, e instanceof AsaasError ? e.message : `Falha ao emitir: ${(e as Error).message}`, false);
   }
   revalidatePath("/", "layout");
@@ -62,6 +70,7 @@ export async function emitirParcelasAcordo(fd: FormData) {
   if ((count ?? 0) > 0) volta(id, "Este caso já tem parcelas emitidas. Cancele as existentes antes de emitir de novo.", false);
   const plano = planoParcelas(total, entradaPct, parcelas, primeiro);
   let emitidas = 0;
+  let primeiraUrl: string | null = null;
   try {
     const customer = await garanteCustomer(caso);
     if (customer !== caso.asaas_customer_id) await sb.from("casos").update({ asaas_customer_id: customer }).eq("id", id);
@@ -69,12 +78,18 @@ export async function emitirParcelasAcordo(fd: FormData) {
       const rot = item.tipo === "entrada" ? "Entrada do acordo" : item.tipo === "integral" ? "Acordo" : `Parcela ${item.n}/${parcelas} do acordo`;
       const p = await criaCobranca({ customer, valor: item.valor, vencimento: item.vencimento, descricao: `${rot} · ${caso.referencia} · ${caso.devedor}`, externalReference: `${id}:${item.tipo}:${item.n}` });
       await sb.from("cobrancas").insert({ caso_id: id, asaas_id: p.id, tipo: item.tipo === "integral" ? "parcela" : item.tipo, parcela_n: item.tipo === "entrada" ? 0 : item.n, parcelas, valor: item.valor, vencimento: item.vencimento, status: p.status ?? "PENDING", invoice_url: p.invoiceUrl ?? null, boleto_url: p.bankSlipUrl ?? null, criado_por: u.nome });
+      primeiraUrl ??= p.invoiceUrl ?? null;
       emitidas++;
     }
     const hoje = hojeISO();
     await sb.from("casos").update({ fase: "acordo", acordo: { parc: parcelas, paid: 0, next: plano[0].vencimento }, ...colunasProxima(marca(hoje, Math.max(1, Math.round((new Date(plano[0].vencimento).getTime() - new Date(hoje).getTime()) / 86400000) + 1), "acordo", `Conferir ${plano[0].tipo === "entrada" ? "entrada" : "1ª parcela"} do acordo (Asaas baixa sozinho)`)), ultima_mov_em: new Date().toISOString() }).eq("id", id);
     await sb.from("eventos").insert({ caso_id: id, autor: u.nome, autor_id: u.id, tipo: "asaas", texto: `${plano.length} cobranças do acordo emitidas no Asaas: total ${brl(total)}${entradaPct ? `, entrada ${entradaPct}%` : ""}, ${parcelas}× a partir de ${fmtData(plano[0].vencimento)}. Baixa automática por webhook.`, visivel_cliente: true });
+    if (fd.get("whatsapp") === "on" && whatsappAtivo() && primeiraUrl) {
+      const { data: cliente } = await sb.from("clientes").select("nome_curto").eq("id", caso.cliente_id).single();
+      await enviaMensagemCaso(sb, caso, (cliente ?? { nome_curto: "o credor" }) as Cliente, "gf_boleto", { valor: plano[0].valor, data: plano[0].vencimento, link: primeiraUrl }, "asaas", u.nome);
+    }
   } catch (e) {
+    if (e instanceof Error && /NEXT_REDIRECT/.test(e.message)) throw e;
     revalidatePath("/", "layout");
     volta(id, `${emitidas} de ${plano.length} emitidas antes do erro. ${e instanceof AsaasError ? e.message : (e as Error).message}`, false);
   }

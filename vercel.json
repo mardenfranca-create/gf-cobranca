@@ -1,1 +1,4 @@
-{ "framework": "nextjs" }
+{
+  "framework": "nextjs",
+  "crons": [{ "path": "/api/cron/regua", "schedule": "0 12 * * 1-5" }]
+}

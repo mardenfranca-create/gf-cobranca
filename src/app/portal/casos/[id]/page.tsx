@@ -8,6 +8,7 @@ import { EXCECOES, FASES, isAberto } from "@/lib/domain/types";
 import { AcoesPortal } from "@/components/AcoesPortal";
 import { PropostaCard } from "@/components/PropostaCard";
 import { CobrancasCaso } from "@/components/CobrancasCaso";
+import { MensagensCaso } from "@/components/MensagensCaso";
 import { Pill } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Caso" };
@@ -30,7 +31,7 @@ export default async function CasoPortalPage(props: PageProps<"/portal/casos/[id
   const { id } = await props.params;
   const [dados, cliente] = await Promise.all([casoPorId(id), clientePorId(u.cliente_id)]);
   if (!dados || !cliente || dados.caso.cliente_id !== u.cliente_id) notFound();
-  const { caso, eventos, parcelas, propostas, cobrancas } = dados;
+  const { caso, eventos, parcelas, propostas, cobrancas, mensagens } = dados;
   const hoje = hojeISO();
   const aberto = isAberto(caso);
   const pendente = propostas.find((p) => p.status === "pending") ?? null;
@@ -82,6 +83,7 @@ export default async function CasoPortalPage(props: PageProps<"/portal/casos/[id
             </dl>
           </div>
           <CobrancasCaso cobrancas={cobrancas} casoId={caso.id} mesa={false} />
+          <MensagensCaso mensagens={mensagens.filter((m) => m.status !== "failed")} mesa={false} />
           {parcelas.length > 0 && (
             <div className="panel"><p className="sec-t">Parcelas em cobrança ({parcelas.length})</p>
               <dl className="dl">{parcelas.map((p) => <span key={p.id} style={{ display: "contents" }}><dt>{p.referencia}</dt><dd className="num">{brl(p.valor)} · venc. {fmtData(p.vencimento)}{p.paga ? " · paga" : ""}</dd></span>)}</dl>
