@@ -38,22 +38,22 @@ export const TEMPLATES: Record<string, Template> = {
   },
   gf_lembrete_2: {
     nome: "gf_lembrete_2", rotulo: "2º lembrete (condições)", categoria: "UTILITY",
-    corpo: "{{1}}, ainda não localizamos o pagamento de {{2}} ({{3}}) devido a {{4}}. Podemos facilitar com desconto ou parcelamento: responda esta mensagem e um atendente do Gontijo Freitas fala com você. Para não receber avisos, responda SAIR.",
+    corpo: "Olá, {{1}}. Ainda não localizamos o pagamento de {{2}} ({{3}}) devido a {{4}}. Podemos facilitar com desconto ou parcelamento: responda esta mensagem e um atendente do Gontijo Freitas fala com você. Para não receber avisos, responda SAIR.",
     params: (d) => [primeiroNome(d.devedor), valor(d.valor), d.referencia, d.credor],
   },
   gf_boleto: {
     nome: "gf_boleto", rotulo: "Boleto/Pix emitido", categoria: "UTILITY",
-    corpo: "{{1}}, segue a cobrança de {{2}} referente a {{3}} ({{4}}), com vencimento em {{5}}. Pague por boleto ou Pix pelo link: {{6}}. Dúvidas, responda aqui.",
+    corpo: "Olá, {{1}}. Segue a cobrança de {{2}} referente a {{3}} ({{4}}), com vencimento em {{5}}. Pague por boleto ou Pix pelo link: {{6}}. Dúvidas, responda aqui.",
     params: (d) => [primeiroNome(d.devedor), valor(d.valor), d.referencia, d.credor, fmtData(d.data), d.link ?? ""],
   },
   gf_vencimento: {
     nome: "gf_vencimento", rotulo: "Parcela vence em 3 dias", categoria: "UTILITY",
-    corpo: "{{1}}, lembrete: a parcela de {{2}} do seu acordo com {{3}} vence em {{4}}. Pague pelo link: {{5}}. Se já pagou, desconsidere.",
+    corpo: "Olá, {{1}}. Lembrete: a parcela de {{2}} do seu acordo com {{3}} vence em {{4}}. Pague pelo link: {{5}}. Se já pagou, desconsidere.",
     params: (d) => [primeiroNome(d.devedor), valor(d.valor), d.credor, fmtData(d.data), d.link ?? ""],
   },
   gf_acordo_quebrado: {
     nome: "gf_acordo_quebrado", rotulo: "Parcela do acordo vencida", categoria: "UTILITY",
-    corpo: "{{1}}, a parcela de {{2}} do seu acordo com {{3}} venceu em {{4}} e não foi localizada. Regularize pelo link {{5}} ou responda aqui para renegociar antes que o acordo seja cancelado.",
+    corpo: "Olá, {{1}}. A parcela de {{2}} do seu acordo com {{3}} venceu em {{4}} e não foi localizada. Regularize pelo link {{5}} ou responda aqui para renegociar antes que o acordo seja cancelado.",
     params: (d) => [primeiroNome(d.devedor), valor(d.valor), d.credor, fmtData(d.data), d.link ?? ""],
   },
 };

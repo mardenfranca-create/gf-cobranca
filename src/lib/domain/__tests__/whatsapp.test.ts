@@ -19,7 +19,7 @@ describe("telefone", () => {
 describe("modelos", () => {
   it("renderiza na ordem dos parâmetros", () => {
     const t = renderiza(TEMPLATES.gf_boleto, { devedor: "Maria da Silva", credor: "Colégio WRJ", valor: 1250.5, referencia: "Mensalidade mar/2026", data: "2026-10-20", link: "https://x/y" });
-    expect(t.replace(/\u00a0/g, " ")).toContain("Maria, segue a cobrança de R$ 1.250,50 referente a Mensalidade mar/2026 (Colégio WRJ), com vencimento em 20/10/2026");
+    expect(t.replace(/\u00a0/g, " ")).toContain("Olá, Maria. Segue a cobrança de R$ 1.250,50 referente a Mensalidade mar/2026 (Colégio WRJ), com vencimento em 20/10/2026");
     expect(t).toContain("https://x/y");
     expect(t).not.toContain("{{");
   });

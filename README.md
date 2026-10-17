@@ -176,10 +176,10 @@ Usa a **WhatsApp Cloud API da Meta** com um número dedicado à cobrança. Só m
 | Nome | Corpo |
 |---|---|
 | `gf_lembrete_1` | Olá, {{1}}. Aqui é o Gontijo Freitas Advogados, em nome de {{2}}. Consta em aberto {{3}}, referente a {{4}}. Se já pagou, desconsidere esta mensagem. Para regularizar ou negociar, é só responder aqui. Para não receber mais avisos, responda SAIR. |
-| `gf_lembrete_2` | {{1}}, ainda não localizamos o pagamento de {{2}} ({{3}}) devido a {{4}}. Podemos facilitar com desconto ou parcelamento: responda esta mensagem e um atendente do Gontijo Freitas fala com você. Para não receber avisos, responda SAIR. |
-| `gf_boleto` | {{1}}, segue a cobrança de {{2}} referente a {{3}} ({{4}}), com vencimento em {{5}}. Pague por boleto ou Pix pelo link: {{6}}. Dúvidas, responda aqui. |
-| `gf_vencimento` | {{1}}, lembrete: a parcela de {{2}} do seu acordo com {{3}} vence em {{4}}. Pague pelo link: {{5}}. Se já pagou, desconsidere. |
-| `gf_acordo_quebrado` | {{1}}, a parcela de {{2}} do seu acordo com {{3}} venceu em {{4}} e não foi localizada. Regularize pelo link {{5}} ou responda aqui para renegociar antes que o acordo seja cancelado. |
+| `gf_lembrete_2` | Olá, {{1}}. Ainda não localizamos o pagamento de {{2}} ({{3}}) devido a {{4}}. Podemos facilitar com desconto ou parcelamento: responda esta mensagem e um atendente do Gontijo Freitas fala com você. Para não receber avisos, responda SAIR. |
+| `gf_boleto` | Olá, {{1}}. Segue a cobrança de {{2}} referente a {{3}} ({{4}}), com vencimento em {{5}}. Pague por boleto ou Pix pelo link: {{6}}. Dúvidas, responda aqui. |
+| `gf_vencimento` | Olá, {{1}}. Lembrete: a parcela de {{2}} do seu acordo com {{3}} vence em {{4}}. Pague pelo link: {{5}}. Se já pagou, desconsidere. |
+| `gf_acordo_quebrado` | Olá, {{1}}. A parcela de {{2}} do seu acordo com {{3}} venceu em {{4}} e não foi localizada. Regularize pelo link {{5}} ou responda aqui para renegociar antes que o acordo seja cancelado. |
 
 Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · referência Mensalidade mar/2026 · credor Colégio WRJ · data 20/10/2026 · link https://www.asaas.com/i/abc123.
 
