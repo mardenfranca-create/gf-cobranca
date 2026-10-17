@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2) e `0003_asaas.sql` (etapa 3). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2) , `0003_asaas.sql` (etapa 3) e `0005_acessos.sql` (log de acesso). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -88,7 +88,8 @@ supabase/migrations/   schema, RLS, triggers (eventos imutáveis, perfil automá
 src/lib/domain/        regras puras, testadas: régua, fila, reconciliação, alçada, parser do Trello
 src/lib/actions/       server actions: cada ação da mesa grava o caso + evento
 src/app/(mesa)/        fila, agenda, quadro, casos, conferência, clientes, importar
-src/app/portal/        portal do cliente: visão geral, carteira, caso, aprovações, planilha, alçadas
+src/app/portal/        portal do cliente: visão geral, carteira, caso, aprovações, relatório mensal, planilha, alçadas
+src/lib/pdf.ts         gerador de PDF sem dependências (texto, linhas, tabelas) usado pelo relatório mensal
 src/proxy.ts           renova a sessão e protege rotas
 scripts/               carga inicial
 ```
@@ -105,6 +106,7 @@ scripts/               carga inicial
 - **cobrancas**: boletos/Pix emitidos no Asaas (um por parcela), com status e links.
 - **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
 - **regua**: prazos configuráveis que governam a próxima ação.
+- **acessos**: log imutável de login (e-mail, resultado, IP, cidade, navegador). Só o admin lê.
 
 ## Portal do cliente (etapa 2)
 
@@ -118,6 +120,12 @@ O cliente entra com o próprio usuário e cai em `/portal`. Tudo passa pelo RLS:
 - **Alçadas e contato**: o cliente ajusta a própria alçada; cada alteração entra em `ajustes_cliente` com autor e data, e aparece na aba Clientes da mesa.
 
 Honorários e prazo de protesto são do contrato: só admin altera, pela mesa.
+
+## Painel do admin, relatório mensal e log de acesso (lote 2)
+
+- **Painel** (`/painel`, só admin): recuperado por mês (12 meses) e por cliente, taxa de acordo (acordos ÷ casos com contato humano), tempo médio e mediano da entrada até o pagamento, carteira parada há mais de 60 dias, produtividade por pessoa (contatos, propostas, acordos, registros nos últimos 30 dias, casos e atrasos de hoje).
+- **Relatório mensal em PDF** com timbrado: o cliente gera no portal (`/portal/relatorio`, escolhe o mês); a equipe gera de qualquer carteira pelo painel ou em `/api/relatorio?cliente=ID&mes=AAAA-MM`. O PDF é gerado no servidor sem biblioteca externa. A linha do rodapé (endereço, OAB) vem da variável `RELATORIO_RODAPE` na Vercel; sem ela, usa o texto padrão.
+- **Log de acesso** (`/painel/acessos`): cada tentativa de login grava e-mail, resultado, IP, cidade aproximada (cabeçalhos da Vercel) e navegador. Requer a migration `0005_acessos.sql`. Falhas de login só são gravadas se `SUPABASE_SERVICE_ROLE_KEY` estiver configurada; o login nunca depende do log.
 
 ## Asaas (etapa 3): boleto, Pix e baixa automática
 

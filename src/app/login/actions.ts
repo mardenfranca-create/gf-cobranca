@@ -1,14 +1,16 @@
 "use server";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
+import { registraAcesso } from "@/lib/acessos";
 
 export async function entrar(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const senha = String(formData.get("senha") ?? "");
   const next = String(formData.get("next") ?? "/");
   const sb = await supabaseServer();
-  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
   if (error) {
+    await registraAcesso(null, { user_id: null, email, resultado: "falha", motivo: error.code ?? String(error.status ?? "erro") });
     // Mostra a causa real (chave errada, e-mail não confirmado, senha) para a equipe conseguir diagnosticar.
     const causa: Record<string, string> = {
       invalid_credentials: "E-mail ou senha incorretos.",
@@ -18,6 +20,9 @@ export async function entrar(formData: FormData) {
     const msg = causa[error.code ?? ""] ?? `Falha na autenticação (${error.code ?? error.status ?? "?"}): ${error.message}`;
     redirect(`/login?erro=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`);
   }
+  const uid = data.user?.id ?? null;
+  const { data: perfil } = uid ? await sb.from("perfis").select("nome, papel").eq("id", uid).maybeSingle() : { data: null };
+  await registraAcesso(sb, { user_id: uid, email, nome: perfil?.nome ?? null, papel: perfil?.papel ?? null, resultado: "ok" });
   redirect(next.startsWith("/") ? next : "/");
 }
 
