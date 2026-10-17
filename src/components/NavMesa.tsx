@@ -10,6 +10,7 @@ const ABAS = [
   { href: "/conferencia", label: "Conferência" },
   { href: "/clientes", label: "Clientes" },
   { href: "/importar", label: "Importar" },
+  { href: "/painel", label: "Painel", admin: true },
   { href: "/equipe", label: "Equipe", admin: true },
 ];
 

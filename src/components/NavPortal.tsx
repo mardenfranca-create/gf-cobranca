@@ -6,6 +6,7 @@ const ABAS = [
   { href: "/portal", label: "Visão geral" },
   { href: "/portal/carteira", label: "Carteira" },
   { href: "/portal/aprovacoes", label: "Aprovações" },
+  { href: "/portal/relatorio", label: "Relatório mensal" },
   { href: "/portal/planilha", label: "Enviar planilha" },
   { href: "/portal/config", label: "Alçadas e contato" },
 ];
