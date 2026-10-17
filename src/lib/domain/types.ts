@@ -162,7 +162,7 @@ export const COBRANCA_STATUS: Record<string, { label: string; cls: string }> = {
 
 export type Mensagem = {
   id: string;
-  caso_id: string;
+  caso_id: string | null; // null = número sem caso vinculado (chegou pelo webhook)
   direcao: "saida" | "entrada";
   canal: string;
   telefone: string;
@@ -175,6 +175,8 @@ export type Mensagem = {
   criado_por: string | null;
   criado_em: string;
   atualizado_em: string;
+  lida_em: string | null;
+  lida_por: string | null;
 };
 export const MENSAGEM_STATUS: Record<string, { label: string; cls: string }> = {
   queued: { label: "Na fila", cls: "ph-regua" }, sent: { label: "Enviada", cls: "ph-regua" }, delivered: { label: "Entregue", cls: "ph-acordo" },
