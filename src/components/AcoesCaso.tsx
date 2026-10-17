@@ -105,6 +105,8 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas }: { ca
     acoes.push({ k: "naoconf", titulo: "Não localizado", sub: "Devolve o caso para negociação e avisa o cliente.", danger: true, form: (<form action={A.pagamentoNaoLocalizado} className="act-form">{H}<Campo label="Motivo"><textarea name="motivo" placeholder="Ex.: valor não consta no extrato de set/26 enviado pela secretaria." /></Campo><div className="actions"><Enviar className="btn danger sm">Devolver para negociação</Enviar></div></form>) });
     acoes.push(atribuir);
   } else {
+    if (caso.proxima_data && caso.proxima_data <= hoje) acoes.push({ k: "concluir", titulo: "Concluir tarefa de hoje sem registrar contato", sub: `"${caso.proxima_nota}". Para conferências e acompanhamentos. A régua marca o próximo passo.`, form: (
+      <form action={A.concluirTarefa} className="act-form">{H}<input type="hidden" name="voltar" value={`/casos/${caso.id}`} /><Campo label="Observação (interna, opcional)"><div className="inp"><input name="nota" placeholder="Ex.: boleto ainda em aberto, aguardar vencimento" /></div></Campo><div className="actions"><Enviar className="btn sm">Concluir</Enviar></div></form>) });
     acoes.push(contato, agendar, atribuir, excecao);
     if (caso.valor_atualizado == null || !caso.documento_digits) acoes.push(cadastro);
     const podeEmitir = !!asaas?.ativo && !!caso.documento_digits && caso.valor_atualizado != null;

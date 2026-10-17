@@ -4,12 +4,14 @@ import { compacto, hojeISO } from "@/lib/domain/datas";
 import { GRUPOS, montaFila } from "@/lib/domain/fila";
 import { isAberto } from "@/lib/domain/types";
 import { LinkCaso, PageHead, Pill, Valor } from "@/components/ui";
+import { concluirTarefa } from "@/lib/actions/casos";
 
 export const metadata: Metadata = { title: "Fila de hoje" };
 
 export default async function FilaPage(props: PageProps<"/fila">) {
   const sp = await props.searchParams;
   const cliente = typeof sp.cliente === "string" ? sp.cliente : null;
+  const ok = typeof sp.ok === "string" ? sp.ok : null;
   const hoje = hojeISO();
   const [casos, clientes] = await Promise.all([listaCasos({ cliente, abertos: true }), mapaClientes()]);
   const tarefas = montaFila(casos, clientes, hoje);
@@ -27,6 +29,7 @@ export default async function FilaPage(props: PageProps<"/fila">) {
         <div className="kpi"><div className="lbl">Pagamentos a conferir</div><div className="val num">{aConferir}</div><div className="foot">informados pelos clientes</div></div>
         <div className="kpi"><div className="lbl">Em exceção</div><div className="val num">{emExcecao}</div><div className="foot">régua pausada, com data de revisão</div></div>
       </div>
+      {ok && <div className="verdict in" style={{ marginBottom: 12 }}>{ok}</div>}
       {tarefas.length === 0 && <div className="panel empty">Fila vazia. Nenhum caso precisa de ação humana hoje.</div>}
       {GRUPOS.map((g) => {
         const ts = tarefas.filter((t) => t.g === g.g);
@@ -36,11 +39,16 @@ export default async function FilaPage(props: PageProps<"/fila">) {
             <div className="group-h"><h2>{g.label}</h2><span>{ts.length} · {g.dica}</span></div>
             <div className="tasks">
               {ts.map((t) => (
-                <LinkCaso key={t.caso.id + t.titulo} caso={t.caso} className="task" {...{ "data-p": t.p }}>
-                  <div className="stripe" />
-                  <div className="body"><div className="t">{t.titulo}</div><div className="d">{t.caso.devedor} · {t.descricao}</div></div>
-                  <div className="side"><span className="cl">{t.cliente} · {t.caso.responsavel}</span><Valor caso={t.caso} /><Pill fase={t.caso.fase} /></div>
-                </LinkCaso>
+                <div key={t.caso.id + t.titulo} className="task-row">
+                  <LinkCaso caso={t.caso} className="task" {...{ "data-p": t.p }}>
+                    <div className="stripe" />
+                    <div className="body"><div className="t">{t.titulo}</div><div className="d">{t.caso.devedor} · {t.descricao}</div></div>
+                    <div className="side"><span className="cl">{t.cliente} · {t.caso.responsavel}</span><Valor caso={t.caso} /><Pill fase={t.caso.fase} /></div>
+                  </LinkCaso>
+                  {g.g !== "completar" && !t.caso.exc_tipo && (
+                    <form action={concluirTarefa} className="task-done"><input type="hidden" name="caso_id" value={t.caso.id} /><input type="hidden" name="voltar" value={`/fila${cliente ? `?cliente=${encodeURIComponent(cliente)}` : ""}`} /><button className="btn ghost sm" type="submit" title="Feito, sem registrar contato. A régua marca o próximo passo.">Concluir</button></form>
+                  )}
+                </div>
               ))}
             </div>
           </section>

@@ -204,3 +204,23 @@ export async function atualizarCadastro(fd: FormData) {
   });
   redirect(`/casos/${id}?ok=${encodeURIComponent("Cadastro atualizado.")}`);
 }
+
+/**
+ * "Feito" sem registrar contato: para tarefas de conferência e acompanhamento. A régua deriva o próximo passo
+ * a partir de agora, então o caso nunca fica sem próxima ação. O evento é interno (o cliente não vê).
+ */
+export async function concluirTarefa(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const voltar = s(fd, "voltar");
+  const nota = s(fd, "nota");
+  let feita = "";
+  await aplica(id, ({ caso, hoje, regua }) => {
+    feita = caso.proxima_nota ?? "tarefa";
+    const agora = { ...caso, ultima_mov_em: new Date().toISOString() };
+    const p = derivaProxima(agora, regua, hoje) ?? marca(hoje, 7, "recontatar", "Acompanhar");
+    if (p.data <= hoje) p.data = addDias(hoje, 1);
+    return { patch: prox(p), evento: { tipo: "sistema", texto: `Tarefa concluída: ${feita}.${nota ? " " + nota : ""} Próximo passo pela régua em ${fmtData(p.data)}: ${p.nota}.`, visivel_cliente: false } };
+  });
+  const msg = encodeURIComponent(`Concluído: ${feita}. Próximo passo marcado pela régua.`);
+  redirect(voltar.startsWith("/") ? `${voltar}${voltar.includes("?") ? "&" : "?"}ok=${msg}` : `/casos/${id}?ok=${msg}`);
+}

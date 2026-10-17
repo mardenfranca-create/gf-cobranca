@@ -352,3 +352,10 @@ td a.rowlink{text-decoration:none;color:inherit;display:block}
 .kv div b{font-weight:600}
 .late{color:var(--bad);font-weight:600}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+
+/* Busca global e tarefas com botão de concluir */
+.busca-topo{flex:1 1 220px;min-width:160px;max-width:360px}
+.busca-topo .search{width:100%;padding:7px 10px}
+.task-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
+.task-done{display:flex;align-items:center}
+@media (max-width:640px){.task-row{grid-template-columns:minmax(0,1fr)}.task-done{justify-content:flex-end}}
