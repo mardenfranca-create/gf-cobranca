@@ -50,6 +50,7 @@ export default async function Diagnostico() {
         <Linha k="Régua automática" v={wa.reguaAuto ? "LIGADA (envia lembretes sozinha nos dias úteis às 9h)" : "desligada (o cron só simula)"} ok={wa.reguaAuto || undefined} />
         <Linha k="CRON_SECRET" v={process.env.CRON_SECRET ? "definido" : "não definido: o cron da régua recusa chamadas"} ok={!!process.env.CRON_SECRET} />
         <Linha k="URL do webhook" v={`https://SEU-DOMINIO/api/whatsapp/webhook (API ${wa.version})`} />
+        <Linha k="Assinatura da WABA" v={`${process.env.WHATSAPP_WABA_ID ? `WHATSAPP_WABA_ID definido` : "WHATSAPP_WABA_ID não definido (descoberto pelo token)"} · confira em /api/whatsapp/assinatura logado como admin; sem app assinado, status e respostas não chegam`} />
         <p className="meta" style={{ marginTop: 16 }}>Alterou uma variável na Vercel? Só vale após <b>Redeploy</b>. Esta página não mostra chaves completas.</p>
       </div>
     </main>

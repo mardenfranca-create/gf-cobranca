@@ -57,7 +57,7 @@ from auth.users u where u.id = p.id and u.email = 'financeiro@wrj.com.br';
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (só servidor)
    - `ASAAS_API_KEY`, `ASAAS_ENV`, `ASAAS_WEBHOOK_TOKEN` (etapa 3, ver seção Asaas)
-   - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_REGUA_AUTOMATICA`, `CRON_SECRET` (etapa 3, ver seção WhatsApp)
+   - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_REGUA_AUTOMATICA`, `CRON_SECRET`, opcional `WHATSAPP_WABA_ID` (etapa 3, ver seção WhatsApp)
 3. Deploy. Abra a URL e entre com um usuário da equipe.
 
 ### 4. Carga da carteira do Trello
@@ -188,8 +188,9 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 1. Vercel: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` (inventado), `WHATSAPP_APP_SECRET`, `CRON_SECRET` (inventado), `WHATSAPP_REGUA_AUTOMATICA=false`. Redeploy.
 2. Meta for Developers → app → WhatsApp → Configuração → **Webhook**: URL `https://SEU-DOMINIO/api/whatsapp/webhook`, token = `WHATSAPP_VERIFY_TOKEN`. Clique em verificar. Assine o campo **messages**.
 3. `/diagnostico`: seção WhatsApp verde. `GET /api/whatsapp/webhook` responde `configurado: true`.
-4. Teste: num caso com celular, *Enviar WhatsApp* → modelo 1º lembrete → o status muda para Entregue/Lida conforme o webhook chega; responda pelo celular e veja a resposta no caso e a tarefa na Fila.
-5. Quando estiver confortável, `WHATSAPP_REGUA_AUTOMATICA=true` + Redeploy liga os lembretes automáticos.
+4. **Assinar a conta ao app** (sem isso a Meta não envia status nem respostas, mesmo com o webhook verificado): logado como admin, abra `/api/whatsapp/assinatura`. Se `assinado: false`, faça um `POST` na mesma URL (no console do navegador: `fetch('/api/whatsapp/assinatura', {method: 'POST'}).then(r => r.json()).then(console.log)`). A WABA é descoberta pelo token; se falhar, defina `WHATSAPP_WABA_ID` (WhatsApp Manager → Identificação da conta) e faça redeploy.
+5. Teste: num caso com celular, *Enviar WhatsApp* → modelo 1º lembrete → o status muda para Entregue/Lida conforme o webhook chega; responda pelo celular e veja a resposta no caso e a tarefa na Fila.
+6. Quando estiver confortável, `WHATSAPP_REGUA_AUTOMATICA=true` + Redeploy liga os lembretes automáticos.
 
 ### O que roda sozinho
 
