@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       const ordem = ["queued", "sent", "delivered", "read"];
       if (status !== "failed" && ordem.indexOf(status) < ordem.indexOf(m.status)) continue;
       await sb.from("mensagens").update({ status, erro }).eq("id", m.id);
-      if (status === "failed") await sb.from("eventos").insert({ caso_id: m.caso_id, autor: "WhatsApp", tipo: "whatsapp", texto: `WhatsApp não entregue (${m.template ?? "mensagem"}): ${erro ?? "sem detalhe"}. Conferir o número.`, visivel_cliente: false });
+      if (status === "failed" && m.caso_id) await sb.from("eventos").insert({ caso_id: m.caso_id, autor: "WhatsApp", tipo: "whatsapp", texto: `WhatsApp não entregue (${m.template ?? "mensagem"}): ${erro ?? "sem detalhe"}. Conferir o número.`, visivel_cliente: false });
       n++;
     }
     for (const msg of v.messages ?? []) {
@@ -59,8 +59,9 @@ export async function POST(req: NextRequest) {
         const { data: cands } = await sb.from("casos").select("id, telefone, fase").not("fase", "in", "(pago,devolvido)").limit(2000);
         casoId = (cands ?? []).find((c) => (c.telefone ?? "").replace(/\D/g, "").endsWith(semDdi.slice(-8)))?.id ?? null;
       }
-      if (!casoId) continue;
+      // Número desconhecido: guarda sem caso; a equipe vincula pela caixa de entrada (/whatsapp).
       await sb.from("mensagens").insert({ caso_id: casoId, direcao: "entrada", telefone: msg.from, texto, wa_id: msg.id, status: "received", origem: "webhook" });
+      if (!casoId) { n++; continue; }
       const { data: c } = await sb.from("casos").select("*").eq("id", casoId).single();
       const caso = c as Caso | null;
       if (pediuSair(texto)) {

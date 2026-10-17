@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp) e `0005_acessos.sql` (log de acesso). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso) e `0006_whatsapp_inbox.sql` (caixa de entrada). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -191,6 +191,13 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 4. **Assinar a conta ao app** (sem isso a Meta não envia status nem respostas, mesmo com o webhook verificado): logado como admin, abra `/api/whatsapp/assinatura`. Se `assinado: false`, faça um `POST` na mesma URL (no console do navegador: `fetch('/api/whatsapp/assinatura', {method: 'POST'}).then(r => r.json()).then(console.log)`). A WABA é descoberta pelo token; se falhar, defina `WHATSAPP_WABA_ID` (WhatsApp Manager → Identificação da conta) e faça redeploy.
 5. Teste: num caso com celular, *Enviar WhatsApp* → modelo 1º lembrete → o status muda para Entregue/Lida conforme o webhook chega; responda pelo celular e veja a resposta no caso e a tarefa na Fila.
 6. Quando estiver confortável, `WHATSAPP_REGUA_AUTOMATICA=true` + Redeploy liga os lembretes automáticos.
+
+### Caixa de entrada (aba WhatsApp na mesa)
+
+- `/whatsapp`: todas as conversas por número, quem espera resposta primeiro, contador de não lidas na aba. Filtros: esperando resposta, janela aberta, sem caso.
+- Abrir uma conversa marca as recebidas como lidas. Dentro da janela de 24h a operadora responde em texto livre; fora, escolhe um modelo. Tudo cai no histórico do caso como antes.
+- Mensagem de número que não combina com nenhum caso fica em "Sem caso"; a operadora vincula ao caso certo (grava o telefone no caso se estiver vazio e move as mensagens).
+- A tela relê o banco a cada 20 segundos enquanto está visível. Requer `0006_whatsapp_inbox.sql`.
 
 ### O que roda sozinho
 

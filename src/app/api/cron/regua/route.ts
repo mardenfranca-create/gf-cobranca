@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const ids = (emRegua ?? []).map((c) => c.id);
   const { data: enviadas } = ids.length ? await sb.from("mensagens").select("caso_id, template").in("caso_id", ids).eq("direcao", "saida").neq("status", "failed") : { data: [] };
   const porCaso = new Map<string, Set<string>>();
-  for (const m of enviadas ?? []) { if (!porCaso.has(m.caso_id)) porCaso.set(m.caso_id, new Set()); if (m.template) porCaso.get(m.caso_id)!.add(m.template); }
+  for (const m of enviadas ?? []) { if (!m.caso_id) continue; if (!porCaso.has(m.caso_id)) porCaso.set(m.caso_id, new Set()); if (m.template) porCaso.get(m.caso_id)!.add(m.template); }
   for (const c of (emRegua ?? []) as Caso[]) {
     const t = lembreteDeHoje(c, porCaso.get(c.id) ?? new Set(), hoje, dias, diffDias);
     if (!t) continue;

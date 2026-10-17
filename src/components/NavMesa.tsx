@@ -7,6 +7,7 @@ const ABAS = [
   { href: "/agenda", label: "Agenda" },
   { href: "/quadro", label: "Quadro" },
   { href: "/casos", label: "Casos" },
+  { href: "/whatsapp", label: "WhatsApp" },
   { href: "/conferencia", label: "Conferência" },
   { href: "/clientes", label: "Clientes" },
   { href: "/importar", label: "Importar" },
@@ -14,7 +15,7 @@ const ABAS = [
   { href: "/equipe", label: "Equipe", admin: true },
 ];
 
-export function NavMesa({ admin }: { admin: boolean }) {
+export function NavMesa({ admin, whatsapp = 0 }: { admin: boolean; whatsapp?: number }) {
   const path = usePathname();
   const sp = useSearchParams();
   const cliente = sp.get("cliente");
@@ -24,6 +25,7 @@ export function NavMesa({ admin }: { admin: boolean }) {
       {ABAS.filter((a) => admin || !a.admin).map((a) => (
         <Link key={a.href} href={`${a.href}${qs}`} aria-current={path === a.href || path.startsWith(a.href + "/") ? "page" : undefined}>
           {a.label}
+          {a.href === "/whatsapp" && whatsapp > 0 && <span className="count num">{whatsapp}</span>}
         </Link>
       ))}
     </nav>

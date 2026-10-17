@@ -1,12 +1,14 @@
+import Link from "next/link";
 import { fmtDataHora } from "@/lib/domain/datas";
 import { MENSAGEM_STATUS, type Mensagem } from "@/lib/domain/types";
 
 /** WhatsApp enviado e recebido no caso. Mesa vê tudo; portal vê sem o erro técnico. */
 export function MensagensCaso({ mensagens, mesa }: { mensagens: Mensagem[]; mesa: boolean }) {
   if (!mensagens.length) return null;
+  const telefone = mensagens[0]?.telefone;
   return (
     <div className="panel">
-      <p className="sec-t">WhatsApp ({mensagens.length})</p>
+      <p className="sec-t" style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>WhatsApp ({mensagens.length})</span>{mesa && telefone && <Link href={`/whatsapp?c=${telefone}`} className="meta">abrir conversa</Link>}</p>
       <div style={{ display: "grid", gap: 8 }}>
         {mensagens.map((m) => {
           const st = MENSAGEM_STATUS[m.status] ?? { label: m.status, cls: "ph-confirma" };

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { exigeEquipe } from "@/lib/auth";
 import { listaClientes } from "@/lib/data";
+import { supabaseServer } from "@/lib/supabase/server";
 import { sair } from "@/app/login/actions";
 import { NavMesa } from "@/components/NavMesa";
 import { SeletorCliente } from "@/components/SeletorCliente";
@@ -8,7 +9,12 @@ import { BuscaGlobal } from "@/components/BuscaGlobal";
 
 export default async function MesaLayout({ children }: LayoutProps<"/">) {
   const u = await exigeEquipe();
-  const clientes = await listaClientes();
+  const sb = await supabaseServer();
+  const [clientes, naoLidas] = await Promise.all([
+    listaClientes(),
+    // Mensagens de WhatsApp recebidas e ainda não lidas (0 se a migration 0004/0006 não existir).
+    sb.from("mensagens").select("id", { count: "exact", head: true }).eq("direcao", "entrada").is("lida_em", null).then((r) => r.count ?? 0, () => 0),
+  ]);
   const iniciais = u.nome.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
@@ -27,7 +33,7 @@ export default async function MesaLayout({ children }: LayoutProps<"/">) {
               <button className="btn ghost sm" type="submit">Sair</button>
             </form>
           </div>
-          <NavMesa admin={u.papel === "admin"} />
+          <NavMesa admin={u.papel === "admin"} whatsapp={naoLidas} />
         </div>
       </header>
       <main className="wrap">{children}</main>
