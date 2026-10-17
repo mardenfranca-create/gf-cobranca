@@ -15,7 +15,8 @@ export default async function CasosPage(props: PageProps<"/casos">) {
   const hoje = hojeISO();
   const [todos, clientes] = await Promise.all([listaCasos({ cliente }), mapaClientes()]);
   let lista = todos.filter((c) => (filtro === "todos" ? true : filtro === "abertos" ? isAberto(c) : c.fase === filtro));
-  if (q) lista = lista.filter((c) => `${c.devedor} ${c.referencia} ${c.detalhe ?? ""} ${c.documento ?? ""} ${clientes[c.cliente_id]?.nome ?? ""}`.toLowerCase().includes(q));
+  const qd = q.replace(/\D/g, "");
+  if (q) lista = lista.filter((c) => `${c.devedor} ${c.referencia} ${c.detalhe ?? ""} ${c.documento ?? ""} ${clientes[c.cliente_id]?.nome ?? ""}`.toLowerCase().includes(q) || (qd.length >= 4 && (c.documento_digits.includes(qd) || (c.telefone ?? "").replace(/\D/g, "").includes(qd))));
   const contagem = todos.reduce<Record<string, number>>((a, c) => ((a[c.fase] = (a[c.fase] ?? 0) + 1), a), {});
   const chip = (key: string, label: string, n: number) => {
     const p = new URLSearchParams();

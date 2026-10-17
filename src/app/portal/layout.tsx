@@ -20,7 +20,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
             <div className="client-pick"><label>Carteira</label><strong style={{ fontSize: 13.5 }}>{cliente?.nome ?? u.cliente_id}</strong></div>
             <form action={sair} className="user">
               <div className="avatar">{iniciais}</div>
-              <span>{u.nome}</span>
+              <span><Link href="/senha?voltar=/portal" title="Trocar senha" style={{ textDecoration: "none" }}>{u.nome}</Link></span>
               <button className="btn ghost sm" type="submit">Sair</button>
             </form>
           </div>
