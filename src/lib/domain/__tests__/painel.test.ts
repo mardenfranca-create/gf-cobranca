@@ -8,7 +8,7 @@ const caso = (p: Partial<Caso>): Caso => ({
   id: p.id ?? Math.random().toString(36).slice(2), cliente_id: "wrj", devedor: "Fulano", documento: null, documento_digits: "", referencia: "Mensalidade", detalhe: null,
   valor_original: 1000, valor_atualizado: 1200, valor_fonte: null, fase: "neg", fase_nota: null, responsavel: "Ana Paula", proxima_data: "2026-10-20", proxima_tipo: "recontatar",
   proxima_nota: "Recontatar", proxima_auto: true, exc_tipo: null, exc_motivo: null, exc_desde: null, exc_revisao: null, telefone: null, email: null, processo: null, acordo: null,
-  origem: null, asaas_customer_id: null, pendencias: [], entrada_em: "2026-08-01", ultima_mov_em: "2026-10-10T12:00:00Z", encerrado_em: null, ...p,
+  origem: null, asaas_customer_id: null, wa_optout: false, pendencias: [], entrada_em: "2026-08-01", ultima_mov_em: "2026-10-10T12:00:00Z", encerrado_em: null, ...p,
 });
 const ev = (p: Partial<Evento>): Evento => ({ id: Math.random().toString(36).slice(2), caso_id: "a", data: "2026-10-05T12:00:00Z", autor: "Ana Paula", tipo: "contato", texto: "WhatsApp: sem resposta.", visivel_cliente: true, ...p });
 
