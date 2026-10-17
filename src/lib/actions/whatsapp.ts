@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { exigeEquipe } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { enviaMensagemCaso } from "@/lib/whatsapp-envio";
+import { enviaTexto, WhatsAppError } from "@/lib/whatsapp";
+import { normalizaCelular } from "@/lib/domain/whatsapp";
+import { colunasProxima, marca } from "@/lib/domain/regua";
+import { hojeISO } from "@/lib/domain/datas";
 import { TEMPLATES } from "@/lib/domain/whatsapp";
 import type { Caso, Cliente } from "@/lib/domain/types";
 
@@ -46,4 +50,33 @@ export async function alternarOptOut(fd: FormData) {
   await sb.from("eventos").insert({ caso_id: id, autor: u.nome, autor_id: u.id, tipo: "whatsapp", texto: novo ? "Mensagens automáticas de WhatsApp bloqueadas para este devedor." : "Mensagens de WhatsApp liberadas de novo para este devedor.", visivel_cliente: false });
   revalidatePath("/", "layout");
   volta(id, novo ? "WhatsApp bloqueado para este devedor." : "WhatsApp liberado.", true);
+}
+
+/** Resposta livre ao devedor, dentro da janela de 24h aberta pela mensagem dele. Vira mensagem + evento visível ao cliente. */
+export async function responderWhatsApp(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const texto = s(fd, "texto");
+  const u = await exigeEquipe();
+  if (texto.length < 2) volta(id, "Escreva a resposta.", false);
+  const sb = await supabaseServer();
+  const { data: caso } = await sb.from("casos").select("*").eq("id", id).single();
+  if (!caso) throw new Error("Caso não encontrado");
+  const to = normalizaCelular(caso.telefone);
+  if (!to) volta(id, "O caso não tem celular válido.", false);
+  const { data: ultima } = await sb.from("mensagens").select("criado_em, telefone").eq("caso_id", id).eq("direcao", "entrada").order("criado_em", { ascending: false }).limit(1).maybeSingle();
+  if (!ultima || Date.now() - new Date(ultima.criado_em).getTime() > 24 * 3600 * 1000) volta(id, "Fora da janela de 24h: o devedor precisa ter respondido nas últimas 24 horas. Use um modelo.", false);
+  const destino = ultima!.telefone || to!;
+  const { data: m } = await sb.from("mensagens").insert({ caso_id: id, direcao: "saida", telefone: destino, template: null, texto, status: "queued", origem: "manual", criado_por: u.nome }).select("id").single();
+  try {
+    const waId = await enviaTexto(destino, texto);
+    if (m) await sb.from("mensagens").update({ wa_id: waId, status: "sent" }).eq("id", m.id);
+    await sb.from("eventos").insert({ caso_id: id, autor: u.nome, autor_id: u.id, tipo: "contato", texto: `WhatsApp (resposta): "${texto}"`, visivel_cliente: true, dados: { mensagem_id: m?.id, wa_id: waId } });
+    await sb.from("casos").update({ ...colunasProxima(marca(hojeISO(), 2, "recontatar", "Acompanhar retorno do devedor no WhatsApp")), ultima_mov_em: new Date().toISOString() }).eq("id", id);
+  } catch (e) {
+    const msg = e instanceof WhatsAppError ? e.message : (e as Error).message;
+    if (m) await sb.from("mensagens").update({ status: "failed", erro: msg }).eq("id", m.id);
+    volta(id, msg, false);
+  }
+  revalidatePath("/", "layout");
+  volta(id, "Resposta enviada por WhatsApp.", true);
 }

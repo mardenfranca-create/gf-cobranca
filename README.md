@@ -188,6 +188,7 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 - **Cron dias úteis 9h (Brasília)** `GET /api/cron/regua` com `Authorization: Bearer CRON_SECRET` (a Vercel envia). Casos em "Régua automática": 1º lembrete em D+`notif1`, 2º em D+`notif1`+`recontato` (dias da aba Clientes → Régua). Depois a mesa assume. Parcelas de acordo no Asaas: lembrete 3 dias antes do vencimento. Com a régua desligada, o cron só simula: `/api/cron/regua?simular=1` mostra o que enviaria.
 - **Emissão no Asaas** com a caixa "Enviar o link por WhatsApp" marcada manda o modelo `gf_boleto` na hora.
 - **Webhook**: status de entrega (enviada, entregue, lida, falhou) e respostas. Resposta vira evento visível ao cliente e tarefa "responder hoje". "SAIR" marca opt-out.
+- **Responder pelo caso**: nas 24h seguintes a uma resposta do devedor, a operadora responde em texto livre direto do caso (janela de atendimento da Meta). Fora da janela, só modelo.
 
 ### Regras de proteção
 

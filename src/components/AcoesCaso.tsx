@@ -5,7 +5,7 @@ import { addDias } from "@/lib/domain/datas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type Proposta } from "@/lib/domain/types";
 import * as A from "@/lib/actions/casos";
 import { emitirCobranca, emitirParcelasAcordo } from "@/lib/actions/asaas";
-import { alternarOptOut, enviarWhatsApp } from "@/lib/actions/whatsapp";
+import { alternarOptOut, enviarWhatsApp, responderWhatsApp } from "@/lib/actions/whatsapp";
 import { normalizaCelular, renderiza, TEMPLATES } from "@/lib/domain/whatsapp";
 
 type Acao = { k: string; titulo: string; sub: string; form: ReactNode; danger?: boolean };
@@ -25,7 +25,7 @@ const Sel = ({ name, opts, def }: { name: string; opts: [string, string][]; def?
   <div className="inp"><select name={name} defaultValue={def}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
 );
 
-export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsapp }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean }; whatsapp?: { ativo: boolean; temCobrancaAberta: boolean } }) {
+export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsapp }: { caso: Caso; cliente: Cliente; hoje: string; propostaPendente: Proposta | null; asaas?: { ativo: boolean; ambiente: string; temCobrancas: boolean }; whatsapp?: { ativo: boolean; temCobrancaAberta: boolean; janelaAte?: string | null } }) {
   const [tpl, setTpl] = useState("gf_lembrete_1");
   const [aberta, setAberta] = useState<string | null>(null);
   const H = <input type="hidden" name="caso_id" value={caso.id} />;
@@ -141,12 +141,19 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsa
       const previa = renderiza(TEMPLATES[tpl], { devedor: caso.devedor, credor: cliente.nome_curto, valor: caso.valor_atualizado, referencia: caso.referencia, data: hoje, link: "https://asaas.com/…" });
       acoes.push({ k: "whatsapp", titulo: caso.wa_optout ? "WhatsApp bloqueado (devedor pediu SAIR)" : "Enviar WhatsApp", sub: cel ? `Para ${caso.telefone}. Só modelos aprovados pela Meta; o texto vai como está na prévia.` : "Sem celular válido no cadastro. Complete o cadastro primeiro.", form: (
         <div className="act-form">
+          {!caso.wa_optout && cel && whatsapp.janelaAte && new Date(whatsapp.janelaAte).getTime() > Date.now() && (
+            <form action={responderWhatsApp} style={{ display: "grid", gap: 10, paddingBottom: 12, borderBottom: "1px solid var(--ink-10)" }}>{H}
+              <div className="verdict in">O devedor respondeu há pouco: dá para responder em texto livre até {new Date(whatsapp.janelaAte).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.</div>
+              <Campo label="Resposta"><textarea name="texto" required minLength={2} placeholder="Escreva como numa conversa. O cliente vê esta mensagem no histórico." /></Campo>
+              <div className="actions"><Enviar className="btn sm">Responder agora</Enviar></div>
+            </form>
+          )}
           {!caso.wa_optout && cel && (
             <form action={enviarWhatsApp} style={{ display: "grid", gap: 10 }}>{H}
               <Campo label="Modelo"><div className="inp"><select name="template" value={tpl} onChange={(e) => setTpl(e.target.value)}>{Object.values(TEMPLATES).map((t) => <option key={t.nome} value={t.nome}>{t.rotulo}</option>)}</select></div></Campo>
               <div className="verdict in" style={{ whiteSpace: "pre-wrap", fontWeight: 400 }}>{previa}</div>
               {precisaCobranca && !whatsapp.temCobrancaAberta && <div className="verdict out">Este modelo usa o link de uma cobrança em aberto no Asaas. Emita o boleto primeiro.</div>}
-              <div className="actions"><button className="btn sm" type="submit" disabled={precisaCobranca && !whatsapp.temCobrancaAberta}>Enviar agora</button></div>
+              <div className="actions"><button className="btn sm" type="submit" disabled={precisaCobranca && !whatsapp.temCobrancaAberta}>Enviar modelo</button></div>
             </form>
           )}
           <form action={alternarOptOut} style={{ marginTop: 8 }}>{H}<Enviar className="btn ghost sm">{caso.wa_optout ? "Liberar mensagens para este devedor" : "Bloquear mensagens para este devedor"}</Enviar></form>
