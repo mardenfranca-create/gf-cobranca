@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso) e `0006_whatsapp_inbox.sql` (caixa de entrada). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) e `0007_telefone_nono_digito.sql` (nono dígito). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -211,4 +211,5 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 - Nunca envia sem celular válido com DDD, com opt-out, com exceção ativa ou fora da fase "Régua automática" (lembretes).
 - Cada lembrete sai uma vez por caso; atraso de dias não gera envio duplo.
 - Webhook exige assinatura `X-Hub-Signature-256` válida (App Secret). Sem ela, 401.
+- **Nono dígito**: a Meta entrega o número de quem tem WhatsApp antigo sem o 9 (`556284077891`); o sistema grava e compara tudo na forma com o 9 (`5562984077891`), então a mesma pessoa é uma conversa só. A migration `0007` corrige as mensagens gravadas antes disso.
 - Texto enviado fica no histórico do caso, visível ao cliente no portal.

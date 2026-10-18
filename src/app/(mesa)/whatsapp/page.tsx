@@ -5,7 +5,7 @@ import { mapaClientes } from "@/lib/data";
 import { supabaseServer } from "@/lib/supabase/server";
 import { fmtDataHora } from "@/lib/domain/datas";
 import { agrupaConversas, filtraConversas, fmtTelefone, type CasoResumo } from "@/lib/domain/inbox";
-import { TEMPLATES } from "@/lib/domain/whatsapp";
+import { canonizaTelefone, TEMPLATES } from "@/lib/domain/whatsapp";
 import { MENSAGEM_STATUS, type Mensagem } from "@/lib/domain/types";
 import { whatsappEnv } from "@/lib/whatsapp";
 import { alternarOptOut, enviarWhatsApp, responderWhatsApp, vincularNumero } from "@/lib/actions/whatsapp";
@@ -20,7 +20,7 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
   const u = await exigeEquipe();
   const sp = await props.searchParams;
   const str = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
-  const sel = str("c").replace(/\D/g, "");
+  const sel = str("c") ? canonizaTelefone(str("c")) : "";
   const so = str("so") || "todas";
   const q = str("q");
   const busca = str("busca");
@@ -38,7 +38,7 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
   const conversas = agrupaConversas(mensagens, casos, new Date());
   const lista = filtraConversas(conversas, so, q);
   const atual = sel ? conversas.find((c) => c.telefone === sel) ?? null : null;
-  const fio = atual ? mensagens.filter((m) => m.telefone === atual.telefone).sort((a, b) => (a.criado_em < b.criado_em ? -1 : 1)) : [];
+  const fio = atual ? mensagens.filter((m) => canonizaTelefone(m.telefone) === atual.telefone).sort((a, b) => (a.criado_em < b.criado_em ? -1 : 1)) : [];
   const aguardando = conversas.filter((c) => c.aguardando).length;
   const semCaso = conversas.filter((c) => !c.caso).length;
 
