@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { diffDias } from "../datas";
-import { lembreteDeHoje, normalizaCelular, pediuSair, renderiza, TEMPLATES } from "../whatsapp";
+import { canonizaTelefone, lembreteDeHoje, normalizaCelular, pediuSair, renderiza, TEMPLATES, variantesTelefone } from "../whatsapp";
 
 describe("telefone", () => {
   it("normaliza formatos brasileiros para E.164 sem +", () => {
@@ -55,5 +55,19 @@ describe("régua automática", () => {
     expect(lembreteDeHoje({ ...base, exc_tipo: "aguardando" }, new Set(), "2026-10-02", dias, diffDias)).toBeNull();
     expect(lembreteDeHoje({ ...base, telefone: null }, new Set(), "2026-10-02", dias, diffDias)).toBeNull();
     expect(lembreteDeHoje({ ...base, fase: "neg" }, new Set(), "2026-10-02", dias, diffDias)).toBeNull();
+  });
+});
+
+describe("nono dígito", () => {
+  it("canoniza o número que a Meta entrega sem o 9 para a forma com o 9", () => {
+    expect(canonizaTelefone("556284077891")).toBe("5562984077891");
+    expect(canonizaTelefone("5562984077891")).toBe("5562984077891");
+    expect(canonizaTelefone("(62) 98407-7891")).toBe("5562984077891");
+    expect(canonizaTelefone("16315551181")).toBe("16315551181"); // fora do padrão BR: só os dígitos
+  });
+  it("variantes cobrem as duas grafias para consultas por igualdade", () => {
+    expect(variantesTelefone("5562984077891").sort()).toEqual(["556284077891", "5562984077891"]);
+    expect(variantesTelefone("556284077891").sort()).toEqual(["556284077891", "5562984077891"]);
+    expect(variantesTelefone("16315551181")).toEqual(["16315551181"]);
   });
 });

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { assinaturaValida, whatsappEnv } from "@/lib/whatsapp";
-import { pediuSair } from "@/lib/domain/whatsapp";
+import { canonizaTelefone, pediuSair, variantesTelefone } from "@/lib/domain/whatsapp";
 import { colunasProxima, marca } from "@/lib/domain/regua";
 import { hojeISO } from "@/lib/domain/datas";
 import { isAberto, type Caso } from "@/lib/domain/types";
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
       const { data: ja } = await sb.from("mensagens").select("id").eq("wa_id", msg.id).maybeSingle();
       if (ja) continue;
       // Acha o caso pelo celular: o mais recente que recebeu mensagem desse número; senão, qualquer caso aberto com o telefone.
-      const { data: ultima } = await sb.from("mensagens").select("caso_id").eq("telefone", msg.from).eq("direcao", "saida").order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      const telefone = canonizaTelefone(msg.from);
+      const { data: ultima } = await sb.from("mensagens").select("caso_id").in("telefone", variantesTelefone(msg.from)).eq("direcao", "saida").order("criado_em", { ascending: false }).limit(1).maybeSingle();
       let casoId = ultima?.caso_id ?? null;
       if (!casoId) {
         const semDdi = msg.from.replace(/^55/, "");
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
         casoId = (cands ?? []).find((c) => (c.telefone ?? "").replace(/\D/g, "").endsWith(semDdi.slice(-8)))?.id ?? null;
       }
       // Número desconhecido: guarda sem caso; a equipe vincula pela caixa de entrada (/whatsapp).
-      await sb.from("mensagens").insert({ caso_id: casoId, direcao: "entrada", telefone: msg.from, texto, wa_id: msg.id, status: "received", origem: "webhook" });
+      await sb.from("mensagens").insert({ caso_id: casoId, direcao: "entrada", telefone, texto, wa_id: msg.id, status: "received", origem: "webhook" });
       if (!casoId) { n++; continue; }
       const { data: c } = await sb.from("casos").select("*").eq("id", casoId).single();
       const caso = c as Caso | null;

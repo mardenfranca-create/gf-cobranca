@@ -1,5 +1,6 @@
 /** Caixa de entrada do WhatsApp: agrupa mensagens em conversas por telefone. Puro. */
 import type { Caso, Mensagem } from "./types";
+import { canonizaTelefone } from "./whatsapp";
 
 export type CasoResumo = Pick<Caso, "id" | "devedor" | "cliente_id" | "responsavel" | "fase" | "wa_optout" | "telefone">;
 
@@ -15,10 +16,10 @@ export type Conversa = {
 
 const JANELA = 24 * 3600 * 1000;
 
-/** Agrupa por telefone. Mensagens vêm em qualquer ordem. `casos` indexa por id. */
+/** Agrupa por telefone canônico (nono dígito normalizado). Mensagens vêm em qualquer ordem. `casos` indexa por id. */
 export function agrupaConversas(mensagens: Mensagem[], casos: Record<string, CasoResumo>, agora: Date): Conversa[] {
   const porTel = new Map<string, Mensagem[]>();
-  for (const m of mensagens) (porTel.get(m.telefone) ?? porTel.set(m.telefone, []).get(m.telefone)!).push(m);
+  for (const m of mensagens) { const k = canonizaTelefone(m.telefone); (porTel.get(k) ?? porTel.set(k, []).get(k)!).push(m); }
   const out: Conversa[] = [];
   for (const [telefone, lista] of porTel) {
     lista.sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1));

@@ -13,6 +13,27 @@ export function normalizaCelular(raw: string | null | undefined): string | null 
   return "55" + d;
 }
 
+/**
+ * Forma canônica de um número para comparar e agrupar: celular brasileiro sempre com o nono dígito
+ * (5562984077891). A Meta entrega o `from` de números antigos sem o 9 (556284077891) e o sistema
+ * envia com o 9; sem canonizar, a mesma pessoa vira duas conversas. Fora do padrão BR, só os dígitos.
+ */
+export function canonizaTelefone(raw: string | null | undefined): string {
+  const d = (raw ?? "").replace(/\D/g, "");
+  return normalizaCelular(d) ?? d;
+}
+
+/** As grafias que um número pode ter no banco (com e sem o nono dígito), para consultas por igualdade. */
+export function variantesTelefone(raw: string | null | undefined): string[] {
+  const canon = canonizaTelefone(raw);
+  const out = new Set<string>([canon]);
+  const m = canon.match(/^55([1-9]{2})9(\d{8})$/);
+  if (m) out.add(`55${m[1]}${m[2]}`);
+  const d = (raw ?? "").replace(/\D/g, "");
+  if (d) out.add(d);
+  return [...out];
+}
+
 export type DadosMensagem = { devedor: string; credor: string; valor: number | null; referencia: string; data?: string | null; link?: string | null };
 
 export type Template = {

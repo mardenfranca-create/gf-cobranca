@@ -5,7 +5,7 @@ import { exigeEquipe } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { enviaMensagemCaso } from "@/lib/whatsapp-envio";
 import { enviaTexto, WhatsAppError } from "@/lib/whatsapp";
-import { normalizaCelular } from "@/lib/domain/whatsapp";
+import { canonizaTelefone, normalizaCelular, variantesTelefone } from "@/lib/domain/whatsapp";
 import { colunasProxima, marca } from "@/lib/domain/regua";
 import { hojeISO } from "@/lib/domain/datas";
 import { TEMPLATES } from "@/lib/domain/whatsapp";
@@ -72,7 +72,7 @@ export async function responderWhatsApp(fd: FormData) {
   if (!to) volta(id, "O caso não tem celular válido.", false, voltar);
   const { data: ultima } = await sb.from("mensagens").select("criado_em, telefone").eq("caso_id", id).eq("direcao", "entrada").order("criado_em", { ascending: false }).limit(1).maybeSingle();
   if (!ultima || Date.now() - new Date(ultima.criado_em).getTime() > 24 * 3600 * 1000) volta(id, "Fora da janela de 24h: o devedor precisa ter respondido nas últimas 24 horas. Use um modelo.", false, voltar);
-  const destino = ultima!.telefone || to!;
+  const destino = canonizaTelefone(ultima!.telefone || to!);
   const { data: m } = await sb.from("mensagens").insert({ caso_id: id, direcao: "saida", telefone: destino, template: null, texto, status: "queued", origem: "manual", criado_por: u.nome }).select("id").single();
   try {
     const waId = await enviaTexto(destino, texto);
@@ -85,7 +85,7 @@ export async function responderWhatsApp(fd: FormData) {
     volta(id, msg, false, voltar);
   }
   // Responder marca como lidas as mensagens recebidas dessa conversa.
-  await sb.from("mensagens").update({ lida_em: new Date().toISOString(), lida_por: u.nome }).eq("telefone", destino).eq("direcao", "entrada").is("lida_em", null);
+  await sb.from("mensagens").update({ lida_em: new Date().toISOString(), lida_por: u.nome }).in("telefone", variantesTelefone(destino)).eq("direcao", "entrada").is("lida_em", null);
   revalidatePath("/", "layout");
   volta(id, "Resposta enviada por WhatsApp.", true, voltar);
 }
@@ -96,13 +96,13 @@ export async function marcarLidas(telefone: string) {
   const tel = telefone.replace(/\D/g, "");
   if (tel.length < 8) return;
   const sb = await supabaseServer();
-  const { data } = await sb.from("mensagens").update({ lida_em: new Date().toISOString(), lida_por: u.nome }).eq("telefone", tel).eq("direcao", "entrada").is("lida_em", null).select("id");
+  const { data } = await sb.from("mensagens").update({ lida_em: new Date().toISOString(), lida_por: u.nome }).in("telefone", variantesTelefone(tel)).eq("direcao", "entrada").is("lida_em", null).select("id");
   if (data?.length) revalidatePath("/", "layout");
 }
 
 /** Liga um número sem caso (mensagem chegou pelo webhook) a um caso escolhido pela operadora. */
 export async function vincularNumero(fd: FormData) {
-  const telefone = s(fd, "telefone").replace(/\D/g, "");
+  const telefone = canonizaTelefone(s(fd, "telefone"));
   const casoId = s(fd, "caso_id");
   const u = await exigeEquipe();
   const voltar = `/whatsapp?c=${telefone}`;
@@ -110,7 +110,7 @@ export async function vincularNumero(fd: FormData) {
   const sb = await supabaseServer();
   const { data: caso } = await sb.from("casos").select("id, devedor, telefone").eq("id", casoId).maybeSingle();
   if (!caso) redirect(`${voltar}&erro=${encodeURIComponent("Caso não encontrado.")}`);
-  const { data: movidas } = await sb.from("mensagens").update({ caso_id: casoId }).eq("telefone", telefone).is("caso_id", null).select("id");
+  const { data: movidas } = await sb.from("mensagens").update({ caso_id: casoId }).in("telefone", variantesTelefone(telefone)).is("caso_id", null).select("id");
   if (!caso!.telefone) await sb.from("casos").update({ telefone }).eq("id", casoId);
   await sb.from("eventos").insert({ caso_id: casoId, autor: u.nome, autor_id: u.id, tipo: "whatsapp", texto: `Número de WhatsApp ${telefone} vinculado ao caso (${movidas?.length ?? 0} ${movidas?.length === 1 ? "mensagem" : "mensagens"}).`, visivel_cliente: false });
   revalidatePath("/", "layout");

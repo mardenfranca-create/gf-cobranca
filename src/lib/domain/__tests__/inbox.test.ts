@@ -42,6 +42,16 @@ describe("caixa de entrada", () => {
     expect(filtraConversas(lista, "todas", "sexta").length).toBe(1);
     expect(filtraConversas(lista, "todas", "0003").map((c) => c.telefone)).toEqual(["5562999990003"]);
   });
+  it("junta na mesma conversa o número com e sem o nono dígito", () => {
+    const lista = agrupaConversas([
+      m({ telefone: "5562984077891", criado_em: "2026-10-17T09:00:00Z" }),
+      m({ telefone: "556284077891", direcao: "entrada", status: "received", texto: "oi", criado_em: "2026-10-17T11:00:00Z" }),
+    ], casos, AGORA);
+    expect(lista).toHaveLength(1);
+    expect(lista[0].telefone).toBe("5562984077891");
+    expect(lista[0].total).toBe(2);
+    expect(lista[0].aguardando).toBe(true);
+  });
   it("formata telefone", () => {
     expect(fmtTelefone("5562999990001")).toBe("(62) 99999-0001");
     expect(fmtTelefone("556233330001")).toBe("(62) 3333-0001");
