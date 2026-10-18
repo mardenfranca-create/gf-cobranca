@@ -105,3 +105,24 @@ export async function baixasAsaas(dias = 30): Promise<(Cobranca & { devedor: str
   const m = Object.fromEntries((casos ?? []).map((c) => [c.id, c]));
   return (data as Cobranca[]).map((c) => ({ ...c, devedor: m[c.caso_id]?.devedor ?? "—", cliente_id: m[c.caso_id]?.cliente_id ?? "" }));
 }
+
+/** Mensagens de WhatsApp dos últimos N dias, mais recentes primeiro (todas as carteiras ou uma). */
+export async function mensagensRecentes(dias = 30, limite = 3000): Promise<Mensagem[]> {
+  const sb = await supabaseServer();
+  const desde = new Date(Date.now() - dias * 24 * 3600 * 1000).toISOString();
+  const { data, error } = await sb.from("mensagens").select("*").gte("criado_em", desde).order("criado_em", { ascending: false }).limit(limite);
+  if (error) throw error;
+  return (data ?? []) as Mensagem[];
+}
+
+export async function casosPorIds(ids: string[]): Promise<Record<string, Caso>> {
+  if (!ids.length) return {};
+  const sb = await supabaseServer();
+  const out: Record<string, Caso> = {};
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await sb.from("casos").select("*").in("id", ids.slice(i, i + 200));
+    if (error) throw error;
+    for (const c of (data ?? []) as Caso[]) out[c.id] = c;
+  }
+  return out;
+}

@@ -7,6 +7,7 @@ const ABAS = [
   { href: "/agenda", label: "Agenda" },
   { href: "/quadro", label: "Quadro" },
   { href: "/casos", label: "Casos" },
+  { href: "/whatsapp", label: "WhatsApp" },
   { href: "/conferencia", label: "Conferência" },
   { href: "/clientes", label: "Clientes" },
   { href: "/importar", label: "Importar" },
@@ -14,7 +15,7 @@ const ABAS = [
   { href: "/equipe", label: "Equipe", admin: true },
 ];
 
-export function NavMesa({ admin }: { admin: boolean }) {
+export function NavMesa({ admin, contadores = {} }: { admin: boolean; contadores?: Record<string, number> }) {
   const path = usePathname();
   const sp = useSearchParams();
   const cliente = sp.get("cliente");
@@ -23,7 +24,7 @@ export function NavMesa({ admin }: { admin: boolean }) {
     <nav className="tabs" aria-label="Seções da mesa">
       {ABAS.filter((a) => admin || !a.admin).map((a) => (
         <Link key={a.href} href={`${a.href}${qs}`} aria-current={path === a.href || path.startsWith(a.href + "/") ? "page" : undefined}>
-          {a.label}
+          {a.label}{contadores[a.href] ? <span className="cnt" title="Conversas aguardando resposta">{contadores[a.href]}</span> : null}
         </Link>
       ))}
     </nav>

@@ -56,6 +56,9 @@ export async function alternarOptOut(fd: FormData) {
 export async function responderWhatsApp(fd: FormData) {
   const id = s(fd, "caso_id");
   const texto = s(fd, "texto");
+  // "voltar": a tela de conversas responde sem sair da lista; sem ele, volta ao caso.
+  const voltar = s(fd, "voltar");
+  const volta = (id: string, msg: string, ok: boolean) => redirect(voltar.startsWith("/") ? `${voltar}${voltar.includes("?") ? "&" : "?"}${ok ? "ok" : "erro"}=${encodeURIComponent(msg)}` : `/casos/${id}?${ok ? "ok" : "erro"}=${encodeURIComponent(msg)}`);
   const u = await exigeEquipe();
   if (texto.length < 2) volta(id, "Escreva a resposta.", false);
   const sb = await supabaseServer();

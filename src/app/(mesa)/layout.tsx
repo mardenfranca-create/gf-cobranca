@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { exigeEquipe } from "@/lib/auth";
-import { listaClientes } from "@/lib/data";
+import { listaClientes, mensagensRecentes } from "@/lib/data";
+import { agrupaConversas } from "@/lib/domain/conversas";
 import { sair } from "@/app/login/actions";
 import { NavMesa } from "@/components/NavMesa";
 import { SeletorCliente } from "@/components/SeletorCliente";
@@ -8,7 +9,8 @@ import { BuscaGlobal } from "@/components/BuscaGlobal";
 
 export default async function MesaLayout({ children }: LayoutProps<"/">) {
   const u = await exigeEquipe();
-  const clientes = await listaClientes();
+  const [clientes, recentes] = await Promise.all([listaClientes(), mensagensRecentes(7, 1500).catch(() => [])]);
+  const aguardando = agrupaConversas(recentes).filter((c) => c.aguardando).length;
   const iniciais = u.nome.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
@@ -27,7 +29,7 @@ export default async function MesaLayout({ children }: LayoutProps<"/">) {
               <button className="btn ghost sm" type="submit">Sair</button>
             </form>
           </div>
-          <NavMesa admin={u.papel === "admin"} />
+          <NavMesa admin={u.papel === "admin"} contadores={{ "/whatsapp": aguardando }} />
         </div>
       </header>
       <main className="wrap">{children}</main>
