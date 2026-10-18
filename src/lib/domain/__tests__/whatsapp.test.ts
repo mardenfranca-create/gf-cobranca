@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { diffDias } from "../datas";
-import { canonizaTelefone, lembreteDeHoje, normalizaCelular, pediuSair, renderiza, TEMPLATES, variantesTelefone } from "../whatsapp";
+import { addDias, diffDias } from "../datas";
+import { canonizaTelefone, datasVencimentoLembrete, lembreteDeHoje, normalizaCelular, pediuSair, renderiza, TEMPLATES, variantesTelefone } from "../whatsapp";
 
 describe("telefone", () => {
   it("normaliza formatos brasileiros para E.164 sem +", () => {
@@ -49,6 +49,15 @@ describe("régua automática", () => {
   });
   it("atraso não duplica: caso velho sem nada enviado recebe só o 1º hoje", () => {
     expect(lembreteDeHoje(base, new Set(), "2026-10-30", dias, diffDias)).toBe("gf_lembrete_1");
+  });
+  it("para de tentar depois de duas falhas de entrega", () => {
+    expect(lembreteDeHoje(base, new Set(), "2026-10-02", dias, diffDias, 1)).toBe("gf_lembrete_1");
+    expect(lembreteDeHoje(base, new Set(), "2026-10-02", dias, diffDias, 2)).toBeNull();
+  });
+  it("vencimentos lembrados: 3 dias antes; na sexta cobre terça e quarta", () => {
+    expect(datasVencimentoLembrete("2026-10-19", addDias)).toEqual(["2026-10-22"]); // segunda → quinta
+    expect(datasVencimentoLembrete("2026-10-22", addDias)).toEqual(["2026-10-25"]); // quinta → domingo (boleto raro, mas coberto)
+    expect(datasVencimentoLembrete("2026-10-23", addDias)).toEqual(["2026-10-26", "2026-10-27", "2026-10-28"]); // sexta → seg, ter, qua
   });
   it("não manda com opt-out, exceção, sem celular ou fora da fase regua", () => {
     expect(lembreteDeHoje({ ...base, wa_optout: true }, new Set(), "2026-10-02", dias, diffDias)).toBeNull();

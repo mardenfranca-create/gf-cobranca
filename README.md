@@ -210,6 +210,8 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 
 - Nunca envia sem celular válido com DDD, com opt-out, com exceção ativa ou fora da fase "Régua automática" (lembretes).
 - Cada lembrete sai uma vez por caso; atraso de dias não gera envio duplo.
+- Se a Meta não entrega o lembrete duas vezes (número sem WhatsApp, por exemplo), a régua para de tentar nesse caso e ele cai na Fila com "conferir o celular".
+- O lembrete de vencimento sai 3 dias antes; como o cron só roda em dia útil, na sexta ele cobre também as parcelas que vencem na terça e na quarta seguintes.
 - Webhook exige assinatura `X-Hub-Signature-256` válida (App Secret). Sem ela, 401.
 - **Nono dígito**: a Meta entrega o número de quem tem WhatsApp antigo sem o 9 (`556284077891`); o sistema grava e compara tudo na forma com o 9 (`5562984077891`), então a mesma pessoa é uma conversa só. A migration `0007` corrige as mensagens gravadas antes disso.
 - Texto enviado fica no histórico do caso, visível ao cliente no portal.
