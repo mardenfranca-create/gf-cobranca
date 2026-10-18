@@ -72,6 +72,15 @@ describe("fila: próxima ação obrigatória", () => {
     const t = montaFila([caso({ proxima_data: null, proxima_tipo: null })], clientes, HOJE);
     expect(t[0]).toMatchObject({ p: "alta", g: "completar" });
   });
+  it("caso em régua sem celular válido pede o cadastro; com celular, opt-out ou outra fase, não", () => {
+    const semTel = montaFila([caso({ fase: "regua", telefone: null })], clientes, HOJE);
+    expect(semTel.map((t) => t.titulo)).toContain("Sem celular: a régua automática não envia");
+    const fixo = montaFila([caso({ fase: "regua", telefone: "(62) 3222-1111" })], clientes, HOJE);
+    expect(fixo.find((t) => t.g === "completar" && /celular/.test(t.titulo))?.descricao).toMatch(/não é celular com DDD/);
+    expect(montaFila([caso({ fase: "regua", telefone: "(62) 99999-8888" })], clientes, HOJE).some((t) => /celular/.test(t.titulo))).toBe(false);
+    expect(montaFila([caso({ fase: "regua", telefone: null, wa_optout: true })], clientes, HOJE).some((t) => /celular/.test(t.titulo))).toBe(false);
+    expect(montaFila([caso({ fase: "neg", telefone: null })], clientes, HOJE).some((t) => /celular/.test(t.titulo))).toBe(false);
+  });
   it("follow-up atrasado vem primeiro e conta os dias", () => {
     const t = montaFila([caso({ proxima_data: "2026-10-01" }), caso({ id: "c2", proxima_data: "2026-12-01" })], clientes, HOJE);
     expect(t[0].titulo).toMatch(/Atrasado 5 dias/);
