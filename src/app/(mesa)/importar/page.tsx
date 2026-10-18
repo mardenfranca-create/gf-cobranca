@@ -3,6 +3,7 @@ import { listaClientes } from "@/lib/data";
 import { supabaseServer } from "@/lib/supabase/server";
 import { fmtDataHora } from "@/lib/domain/datas";
 import { ImportarPlanilha, ImportarTrello } from "@/components/ImportarPlanilha";
+import { ImportarTelefones } from "@/components/ImportarTelefones";
 import { PageHead } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Importar" };
@@ -34,6 +35,7 @@ export default async function ImportarPage(props: PageProps<"/importar">) {
           <p className="meta" style={{ marginTop: 14 }}><b>Reconciliação:</b> o mesmo devedor (cliente + CPF/CNPJ) com caso aberto não vira caso novo; a parcela entra no caso existente. Quem está como pago vai para conferência de baixa. Quem tem caso aberto e sumiu da planilha pode ir para conferência também, se você marcar que a planilha é a posição completa. Cabeçalhos parecidos são aceitos (Nome, CPF/CNPJ, Descrição, Total, Data, Celular).</p>
         </div>
       </div>
+      <div style={{ marginBottom: 16 }}><ImportarTelefones clientes={clientes.map((c) => ({ id: c.id, nome: c.nome }))} /></div>
       <div className="grid two">
         <ImportarTrello />
         <div className="panel">
