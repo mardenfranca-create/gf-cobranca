@@ -95,8 +95,25 @@ export type CasoRegua = { id: string; fase: string; exc_tipo: string | null; wa_
  * D+notif1 → gf_lembrete_1; D+notif1+recontato → gf_lembrete_2; depois a mesa assume (fila "cobrança humana").
  * Só envia o que ainda não foi enviado para o caso; atraso de dias não gera envio duplo.
  */
-export function lembreteDeHoje(caso: CasoRegua, enviados: Set<string>, hoje: string, dias: { notif1: number; recontato: number }, diffDias: (a: string, b: string) => number): string | null {
+/** Depois de tantas falhas de entrega pela régua, o caso sai da régua automática e vira tarefa para conferir o número. */
+export const MAX_FALHAS_REGUA = 2;
+
+/**
+ * Vencimentos que o cron de hoje deve lembrar (3 dias antes). O cron só roda em dia útil, então na sexta
+ * ele cobre também os vencimentos de terça e quarta, que o sábado e o domingo cobririam se rodassem.
+ */
+export function datasVencimentoLembrete(hoje: string, addDias: (iso: string, n: number) => string): string[] {
+  const diaSemana = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+  let proximoCron = addDias(hoje, 1);
+  while (diaSemana(proximoCron) === 0 || diaSemana(proximoCron) === 6) proximoCron = addDias(proximoCron, 1);
+  const out: string[] = [];
+  for (let d = addDias(hoje, 3); d < addDias(proximoCron, 3); d = addDias(d, 1)) out.push(d);
+  return out;
+}
+
+export function lembreteDeHoje(caso: CasoRegua, enviados: Set<string>, hoje: string, dias: { notif1: number; recontato: number }, diffDias: (a: string, b: string) => number, falhas = 0): string | null {
   if (caso.fase !== "regua" || caso.exc_tipo || caso.wa_optout || !normalizaCelular(caso.telefone)) return null;
+  if (falhas >= MAX_FALHAS_REGUA) return null;
   const idade = diffDias(hoje, caso.entrada_em);
   if (idade >= dias.notif1 && !enviados.has("gf_lembrete_1")) return "gf_lembrete_1";
   if (idade >= dias.notif1 + dias.recontato && enviados.has("gf_lembrete_1") && !enviados.has("gf_lembrete_2")) return "gf_lembrete_2";
