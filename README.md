@@ -212,7 +212,7 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 
 ### Regras de proteção
 
-- Nunca envia sem celular válido com DDD, com opt-out, com exceção ativa ou fora da fase "Régua automática" (lembretes).
+- Nunca envia sem celular válido com DDD, com opt-out, com exceção ativa ou fora da fase "Régua automática" (lembretes). Caso em régua sem celular aparece na Fila, em "Completar cadastro", como "Sem celular: a régua automática não envia".
 - Cada lembrete sai uma vez por caso; atraso de dias não gera envio duplo.
 - Se a Meta não entrega o lembrete duas vezes (número sem WhatsApp, por exemplo), a régua para de tentar nesse caso e ele cai na Fila com "conferir o celular".
 - O lembrete de vencimento sai 3 dias antes; como o cron só roda em dia útil, na sexta ele cobre também as parcelas que vencem na terça e na quarta seguintes.

@@ -1,5 +1,6 @@
 import { diffDias } from "./datas";
 import { EXCECOES, FOLLOWUPS, isAberto, type Caso, type Cliente } from "./types";
+import { normalizaCelular } from "./whatsapp";
 
 export type Prioridade = "alta" | "media" | "baixa";
 export type Grupo = "agenda" | "conferir" | "negociar" | "decidir" | "aguardar" | "completar";
@@ -19,7 +20,7 @@ export const GRUPOS: { g: Grupo; label: string; dica: string }[] = [
   { g: "negociar", label: "Negociar", dica: "Casos que precisam de contato humano hoje." },
   { g: "decidir", label: "Decidir próximo passo", dica: "Protesto, judicial, devolução ou nova rodada." },
   { g: "aguardar", label: "Aguardando o cliente", dica: "Nada a fazer além de lembrar. O cliente decide no portal." },
-  { g: "completar", label: "Completar cadastro", dica: "Sem valor, sem documento ou sem próxima ação: o sistema não deixa esquecer." },
+  { g: "completar", label: "Completar cadastro", dica: "Sem valor, sem documento, sem celular ou sem próxima ação: o sistema não deixa esquecer." },
 ];
 
 /** Monta a fila do dia a partir das regras. Puro: recebe casos e devolve tarefas. */
@@ -40,6 +41,10 @@ export function montaFila(casos: Caso[], clientes: Record<string, Cliente>, hoje
     if (!c.proxima_data || !c.proxima_tipo) {
       tarefas.push({ ...base, p: "alta", g: "completar", titulo: "Sem próxima ação definida", descricao: "Nenhum caso aberto pode ficar sem responsável, ação e data." });
       continue;
+    }
+    // Régua automática só envia com celular válido: sem ele, o caso fica parado em silêncio.
+    if (c.fase === "regua" && !c.wa_optout && !normalizaCelular(c.telefone)) {
+      tarefas.push({ ...base, p: "media", g: "completar", titulo: "Sem celular: a régua automática não envia", descricao: `${c.telefone ? `Telefone cadastrado (${c.telefone}) não é celular com DDD.` : "Nenhum telefone cadastrado."} Cadastre o celular em Completar cadastro; até lá nenhum lembrete sai para este devedor.` });
     }
     if (c.proxima_data <= hoje) {
       const atraso = diffDias(hoje, c.proxima_data);
