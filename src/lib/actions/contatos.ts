@@ -6,7 +6,7 @@ import { cruzaContatos, leContatos, resumoCruzamento, type CasoTel, type Contato
 
 export type PreviaTelefones =
   | { ok: false; erro: string }
-  | { ok: true; arquivos: number; lidos: number; avisos: string[]; resumo: ReturnType<typeof resumoCruzamento>; itens: Cruzamento[] };
+  | { ok: true; arquivos: number; lidos: number; avisos: string[]; resumo: ReturnType<typeof resumoCruzamento>; itens: Cruzamento[]; agenda: [string, string, string][] };
 
 /** Lê um ou mais arquivos de contatos e cruza com os casos abertos. Nada é gravado. */
 export async function previaTelefones(fd: FormData): Promise<PreviaTelefones> {
@@ -34,7 +34,9 @@ export async function previaTelefones(fd: FormData): Promise<PreviaTelefones> {
   const itens = cruzaContatos(unicos, (casos ?? []) as CasoTel[], clientes ?? []);
   // Só devolve o que interessa à tela: casa com caso, ou é contato de cobrança sem caso.
   const relevantes = itens.filter((x) => x.kind !== "sem_caso" || x.cobranca);
-  return { ok: true, arquivos: arquivos.length, lidos: contatos.length, avisos, resumo: resumoCruzamento(itens), itens: relevantes };
+  // Agenda: todos os contatos lidos (nome, telefone, etiqueta de cliente quando o nome traz LOBE, ASVC...), para gravar na tabela contatos.
+  const agenda: [string, string, string][] = itens.map((x) => [x.contato.nome.slice(0, 120), x.contato.telefone, x.cliente_id ?? (x.cobranca ? "cobranca" : "")]);
+  return { ok: true, arquivos: arquivos.length, lidos: contatos.length, avisos, resumo: resumoCruzamento(itens), itens: relevantes, agenda };
 }
 
 /** Grava os telefones escolhidos. `escolhas` = lista de "caso_id|telefone"; `sobrescrever` libera trocar telefone já cadastrado. */
@@ -42,9 +44,29 @@ export async function aplicarTelefones(fd: FormData): Promise<{ ok: boolean; msg
   const u = await exigeEquipe();
   const escolhas = fd.getAll("escolha").map(String).filter(Boolean);
   const sobrescrever = fd.get("sobrescrever") === "on";
-  if (!escolhas.length) return { ok: false, msg: "Nenhum telefone marcado." };
+  const guardarAgenda = fd.get("agenda_guardar") === "on";
+  let agenda: [string, string, string][] = [];
+  try { agenda = guardarAgenda ? (JSON.parse(String(fd.get("agenda") ?? "[]")) as [string, string, string][]) : []; } catch { agenda = []; }
+  if (!escolhas.length && !agenda.length) return { ok: false, msg: "Nenhum telefone marcado e agenda desmarcada: nada a gravar." };
   const sb = await supabaseServer();
-  let gravados = 0, pulados = 0;
+  let gravados = 0, pulados = 0, naAgenda = 0, erroAgenda: string | null = null;
+  // Agenda: upsert em lotes. Nome existente só é trocado se o novo for mais informativo (não numérico e maior).
+  if (agenda.length) {
+    const { data: existentes } = await sb.from("contatos").select("telefone, nome").in("telefone", agenda.map((a) => a[1]).slice(0, 10000));
+    const nomeAtual = new Map((existentes ?? []).map((c) => [c.telefone, c.nome]));
+    const linhas = agenda
+      .filter(([nome, tel]) => /^\d{10,15}$/.test(tel) && nome.trim().length >= 2)
+      .map(([nome, telefone, etiqueta]) => {
+        const antes = nomeAtual.get(telefone);
+        const novoEhMelhor = !antes || (/^\d+$/.test(antes) && !/^\d+$/.test(nome)) || (!/^\d+$/.test(nome) && nome.length > antes.length);
+        return { telefone, nome: novoEhMelhor ? nome.trim() : antes!, origem: "importacao", etiquetas: etiqueta ? [etiqueta] : [], criado_por: u.nome };
+      });
+    for (let i = 0; i < linhas.length; i += 500) {
+      const { error } = await sb.from("contatos").upsert(linhas.slice(i, i + 500), { onConflict: "telefone" });
+      if (error) { erroAgenda = error.message; break; }
+      naAgenda += Math.min(500, linhas.length - i);
+    }
+  }
   for (const e of escolhas) {
     const [casoId, telefone, nomeContato] = e.split("|");
     if (!casoId || !/^\d{10,15}$/.test(telefone)) { pulados++; continue; }
@@ -61,5 +83,9 @@ export async function aplicarTelefones(fd: FormData): Promise<{ ok: boolean; msg
     gravados++;
   }
   revalidatePath("/", "layout");
-  return { ok: gravados > 0, msg: `${gravados} ${gravados === 1 ? "telefone gravado" : "telefones gravados"}${pulados ? ` · ${pulados} ${pulados === 1 ? "pulado" : "pulados"} (já tinha telefone, igual ao atual ou inválido)` : ""}.` };
+  const partes = [`${gravados} ${gravados === 1 ? "telefone gravado em caso" : "telefones gravados em casos"}`];
+  if (pulados) partes.push(`${pulados} ${pulados === 1 ? "pulado" : "pulados"} (já tinha telefone, igual ao atual ou inválido)`);
+  if (naAgenda) partes.push(`${naAgenda} contatos na agenda`);
+  if (erroAgenda) partes.push(`agenda não gravada: ${erroAgenda} (migration 0008 aplicada?)`);
+  return { ok: gravados > 0 || naAgenda > 0, msg: partes.join(" · ") + "." };
 }

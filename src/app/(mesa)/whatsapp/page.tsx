@@ -36,6 +36,11 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
   const { data: casosRaw } = casoIds.length ? await sb.from("casos").select(COLS).in("id", casoIds) : { data: [] };
   const casos = Object.fromEntries(((casosRaw ?? []) as CasoResumo[]).map((c) => [c.id, c]));
   const conversas = agrupaConversas(mensagens, casos, new Date());
+  // Agenda: nome para números sem caso (tabela contatos; vazia se a migration 0008 não existir).
+  const semCasoTels = conversas.filter((c) => !c.caso).map((c) => c.telefone);
+  const { data: agendaRaw } = semCasoTels.length ? await sb.from("contatos").select("telefone, nome, etiquetas").in("telefone", semCasoTels.slice(0, 1000)) : { data: [] };
+  const agenda = new Map((agendaRaw ?? []).map((a) => [a.telefone, a]));
+  const nomeDe = (tel: string) => agenda.get(tel)?.nome ?? null;
   const lista = filtraConversas(conversas, so, q);
   const atual = sel ? conversas.find((c) => c.telefone === sel) ?? null : null;
   const fio = atual ? mensagens.filter((m) => canonizaTelefone(m.telefone) === atual.telefone).sort((a, b) => (a.criado_em < b.criado_em ? -1 : 1)) : [];
@@ -88,11 +93,11 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
             {lista.map((c) => (
               <Link key={c.telefone} href={href({ c: c.telefone })} className="wa-item" aria-current={atual?.telefone === c.telefone ? "true" : undefined} data-aguardando={c.aguardando ? "" : undefined}>
                 <div className="wa-item-top">
-                  <b>{c.caso?.devedor ?? fmtTelefone(c.telefone)}</b>
+                  <b>{c.caso?.devedor ?? nomeDe(c.telefone) ?? fmtTelefone(c.telefone)}</b>
                   <span className="meta num">{fmtDataHora(c.ultima.criado_em).replace(/^(\d\d\/\d\d)\/\d{4}/, "$1")}</span>
                 </div>
                 <div className="wa-item-sub">
-                  <span className="meta">{c.caso ? `${clientes[c.caso.cliente_id]?.nome_curto ?? c.caso.cliente_id} · ${c.caso.responsavel ?? "sem responsável"}` : "número sem caso"}</span>
+                  <span className="meta">{c.caso ? `${clientes[c.caso.cliente_id]?.nome_curto ?? c.caso.cliente_id} · ${c.caso.responsavel ?? "sem responsável"}` : nomeDe(c.telefone) ? `agenda${agenda.get(c.telefone)?.etiquetas?.length ? ` · ${agenda.get(c.telefone)!.etiquetas.join(", ")}` : ""} · sem caso` : "número sem caso"}</span>
                   {c.naoLidas > 0 && <span className="count num">{c.naoLidas}</span>}
                 </div>
                 <div className="wa-item-preview">{c.ultima.direcao === "saida" ? "Você: " : ""}{c.ultima.texto}</div>
@@ -110,9 +115,9 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
               <RolaParaFim chave={`${atual.telefone}:${fio.length}:${atual.ultima.id}`} />
               <header className="wa-head">
                 <div>
-                  <div className="wa-title">{atual.caso?.devedor ?? "Número sem caso"} <span className="meta num">{fmtTelefone(atual.telefone)}</span></div>
+                  <div className="wa-title">{atual.caso?.devedor ?? nomeDe(atual.telefone) ?? "Número sem caso"} <span className="meta num">{fmtTelefone(atual.telefone)}</span></div>
                   <div className="meta">
-                    {atual.caso ? <>{clientes[atual.caso.cliente_id]?.nome ?? atual.caso.cliente_id} · {atual.caso.responsavel ?? "sem responsável"} · <Pill fase={atual.caso.fase} /> · <Link href={`/casos/${atual.caso.id}`}>abrir caso</Link></> : "Chegou pelo webhook sem combinar com nenhum caso. Vincule abaixo para responder."}
+                    {atual.caso ? <>{clientes[atual.caso.cliente_id]?.nome ?? atual.caso.cliente_id} · {atual.caso.responsavel ?? "sem responsável"} · <Pill fase={atual.caso.fase} /> · <Link href={`/casos/${atual.caso.id}`}>abrir caso</Link></> : (nomeDe(atual.telefone) ? "Contato da agenda, sem caso de cobrança. Vincule a um caso para responder por aqui." : "Chegou pelo webhook sem combinar com nenhum caso. Vincule abaixo para responder.")}
                   </div>
                 </div>
                 <div className="wa-head-side">

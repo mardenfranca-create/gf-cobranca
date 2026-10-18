@@ -8,6 +8,7 @@ type Perfil = { id: string; nome: string; papel: Papel; cliente_id: string | nul
 type Ajuste = { id: string; cliente_id: string; autor: string; autor_id: string | null; campo: string; antes: unknown; depois: unknown; criado_em: string };
 type AsaasEvento = { id: string; evento: string; payment_id: string | null; payload: Record<string, unknown>; resultado: string | null; recebido_em: string };
 type Acesso = { id: string; user_id: string | null; email: string; nome: string | null; papel: string | null; resultado: "ok" | "falha"; motivo: string | null; ip: string | null; cidade: string | null; user_agent: string | null; criado_em: string };
+type Contato = { telefone: string; nome: string; origem: string; etiquetas: string[]; observacao: string | null; criado_por: string | null; criado_em: string; atualizado_em: string };
 type Importacao = { id: string; cliente_id: string | null; origem: string; arquivo: string; hash: string; linhas: number; resumo: Record<string, unknown>; criado_por: string; criado_em: string };
 
 type Tabela<Row, Omitidas extends keyof Row = never> = {
@@ -33,6 +34,7 @@ export type Database = {
       asaas_eventos: Tabela<AsaasEvento>;
       mensagens: Tabela<Mensagem>;
       acessos: Tabela<Acesso>;
+      contatos: Tabela<Contato>;
     };
     Views: Record<string, never>;
     Functions: {

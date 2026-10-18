@@ -30,8 +30,13 @@ export function ImportarTelefones({ clientes }: { clientes: { id: string; nome: 
       {previa && previa.ok && (
         <form style={{ marginTop: 14 }} action={(fd) => start(async () => { const r = await aplicarTelefones(fd); setMsg(r.msg); if (r.ok) setPrevia(null); })}>
           {previa.avisos.map((a) => <div key={a} className="verdict warn" style={{ marginBottom: 8 }}>{a}</div>)}
+          <input type="hidden" name="agenda" value={JSON.stringify(previa.agenda)} />
+          <div className="verdict in" style={{ marginBottom: 12 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}><input type="checkbox" name="agenda_guardar" defaultChecked style={{ marginTop: 3 }} />
+              <span><b>Guardar todos os {previa.agenda.length} contatos na agenda do sistema.</b> A aba WhatsApp passa a mostrar o nome de quem escreve, mesmo sem caso. Contato que já existe só muda de nome se o novo for mais completo.</span></label>
+          </div>
           <div className="up-sum"><div><b>{previa.lidos} contatos em {previa.arquivos} {previa.arquivos === 1 ? "arquivo" : "arquivos"}.</b> <span className="okt">{previa.resumo.preencher} para preencher</span> · {previa.resumo.igual} já cadastrados · {previa.resumo.diferente} com telefone diferente · {previa.resumo.ambiguo} ambíguos · {previa.resumo.sem_caso} sem caso ({previa.resumo.cobrancaSemCaso} marcados como cobrança)</div>
-            <button className="btn" type="submit" disabled={pending || (previa.resumo.preencher + previa.resumo.diferente === 0)}>Gravar marcados</button></div>
+            <button className="btn" type="submit" disabled={pending}>Gravar</button></div>
           {grupo("diferente").length > 0 && (
             <div className="verdict warn" style={{ marginBottom: 12 }}>
               <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}><input type="checkbox" name="sobrescrever" style={{ marginTop: 3 }} />
