@@ -3,7 +3,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigeEquipe } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { listaRegua } from "@/lib/data";
+import { listaCasos, listaClientes, listaRegua, parcelasDosCasos } from "@/lib/data";
+import { abreCaso, consolidaParcela } from "@/lib/abertura-caso";
+import { normalizaNovoCaso, type CamposNovoCaso } from "@/lib/domain/novo-caso";
+import { reconcilia } from "@/lib/domain/reconcile";
 import { addDias, brl, fmtData, hojeISO } from "@/lib/domain/datas";
 import { confereAlcada } from "@/lib/domain/alcada";
 import { colunasExcecao, colunasProxima, derivaProxima, mapaRegua, marca, type ProximaAcao } from "@/lib/domain/regua";
@@ -223,4 +226,58 @@ export async function concluirTarefa(fd: FormData) {
   });
   const msg = encodeURIComponent(`Concluído: ${feita}. Próximo passo marcado pela régua.`);
   redirect(voltar.startsWith("/") ? `${voltar}${voltar.includes("?") ? "&" : "?"}ok=${msg}` : `/casos/${id}?ok=${msg}`);
+}
+
+/* ---------- Novo caso pela mesa (sem planilha) ---------- */
+
+export type EstadoNovoCaso = { erros: string[]; avisos: string[]; valores: CamposNovoCaso } | null;
+
+/**
+ * Cadastra um devedor avulso com a mesma regra da importação: valida como linha de planilha, reconcilia com a carteira
+ * (devedor já em cobrança recebe a parcela no caso existente) e abre o caso pela função compartilhada.
+ * Devolve o estado do formulário quando há erro; em caso de sucesso redireciona para o caso.
+ */
+export async function novoCaso(_prev: EstadoNovoCaso, fd: FormData): Promise<EstadoNovoCaso> {
+  const u = await exigeEquipe();
+  const valores: CamposNovoCaso = {
+    cliente_id: s(fd, "cliente_id"), devedor: s(fd, "devedor"), documento: s(fd, "documento"), referencia: s(fd, "referencia"), valor: s(fd, "valor"),
+    vencimento: s(fd, "vencimento"), telefone: s(fd, "telefone"), email: s(fd, "email"), responsavel: s(fd, "responsavel"),
+  };
+  const hoje = hojeISO();
+  const r = normalizaNovoCaso(valores, hoje);
+  if (r.erros.length) return { erros: r.erros, avisos: r.avisos, valores };
+
+  const [clientes, abertos] = await Promise.all([listaClientes(), listaCasos({ cliente: valores.cliente_id, abertos: true })]);
+  if (!clientes.some((c) => c.id === valores.cliente_id)) return { erros: ["cliente não encontrado ou inativo"], avisos: [], valores };
+  const parcelas = await parcelasDosCasos(abertos.map((c) => c.id));
+  const [linha] = reconcilia([r.linha], abertos, parcelas, clientes, valores.cliente_id).linhas;
+  if (linha.erros.length) return { erros: linha.erros, avisos: r.avisos, valores };
+
+  const sb = await supabaseServer();
+  const autor = { nome: u.nome, id: u.id };
+  const aviso = r.avisos.length ? ` Atenção: ${r.avisos.join(" ")}` : "";
+  let destino: string;
+  try {
+    if (linha.caso && linha.kind === "igual") {
+      destino = `/casos/${linha.caso.id}?ok=${encodeURIComponent(`${linha.caso.devedor} já está em cobrança e esta parcela (${linha.referencia}, venc. ${fmtData(linha.vencimento)}) já consta no caso. Nada foi alterado.`)}`;
+    } else if (linha.caso) {
+      await consolidaParcela(sb, linha.caso.id, { referencia: linha.referencia, valor: linha.valor!, vencimento: linha.vencimento! }, {
+        autor, valor_fonte: "mesa (consolidado)", eventoTexto: `${u.nome} cadastrou nova parcela em aberto pela mesa (${linha.referencia}, ${brl(linha.valor)}). Caso consolidado, régua mantida.`,
+      });
+      destino = `/casos/${linha.caso.id}?ok=${encodeURIComponent(`${linha.caso.devedor} já estava em cobrança: a parcela foi adicionada ao caso existente.`)}`;
+    } else {
+      const regua = mapaRegua(await listaRegua());
+      const id = await abreCaso(sb, {
+        cliente_id: valores.cliente_id, devedor: linha.devedor, documento: linha.documento, referencia: linha.referencia, valor: linha.valor!, vencimento: linha.vencimento!,
+        telefone: linha.telefone, email: linha.email, responsavel: r.responsavel, valor_fonte: "mesa",
+      }, { regua, hoje, autor, eventoTipo: "sistema", eventoTexto: `Caso aberto na mesa por ${u.nome}. Primeira notificação agendada na régua.` });
+      destino = `/casos/${id}?ok=${encodeURIComponent(`Caso aberto.${aviso}`)}`;
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("novoCaso falhou:", msg);
+    return { erros: [`Não consegui gravar: ${msg}`], avisos: r.avisos, valores };
+  }
+  revalidatePath("/", "layout");
+  redirect(destino);
 }

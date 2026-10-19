@@ -6,6 +6,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { listaCasos, listaClientes, listaRegua, parcelasDosCasos } from "@/lib/data";
 import { addDias, fmtData, hojeISO } from "@/lib/domain/datas";
 import { colunasExcecao, colunasProxima, derivaProxima, mapaRegua } from "@/lib/domain/regua";
+import { abreCaso, consolidaParcela, registraEvento } from "@/lib/abertura-caso";
 import { hashLinhas, normalizaPlanilha, reconcilia, type LinhaClassificada, type Reconciliacao } from "@/lib/domain/reconcile";
 import { parseTrello } from "@/lib/domain/trello";
 import type { Caso } from "@/lib/domain/types";
@@ -116,13 +117,11 @@ async function aplicarInterno(fd: FormData, u: Usuario, clienteForcado: string |
   const hoje = hojeISO();
   const stamp = `planilha ${previa.arquivo} de ${fmtData(hoje)}${u.papel === "cliente" ? ` (enviada pelo cliente · ${u.nome})` : ""}`;
   const n = { novos: 0, consolidados: 0, baixas: 0, excecoes: 0, ausentes: 0 };
-  const ev = (caso_id: string, tipo: string, texto: string) => sb.from("eventos").insert({ caso_id, autor: u.nome, autor_id: u.id, tipo, texto, visivel_cliente: true });
+  const autor = { nome: u.nome, id: u.id };
+  const ev = (caso_id: string, tipo: string, texto: string) => registraEvento(sb, caso_id, autor, tipo, texto);
   const criadosNestaCarga: Record<number, string> = {}; // linha que abriu o caso → id do caso
   const consolida = async (casoId: string, l: (typeof previa.linhas)[number]) => {
-    const { data: c } = await sb.from("casos").select("valor_original, valor_atualizado").eq("id", casoId).single();
-    await sb.from("parcelas").upsert({ caso_id: casoId, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! }, { onConflict: "caso_id,referencia,vencimento", ignoreDuplicates: true });
-    await sb.from("casos").update({ valor_original: (c?.valor_original ?? 0) + l.valor!, valor_atualizado: (c?.valor_atualizado ?? 0) + l.valor!, valor_fonte: "planilha (consolidado)", ultima_mov_em: new Date().toISOString() }).eq("id", casoId);
-    await ev(casoId, "importacao", `${stamp}: nova parcela em aberto (${l.referencia}, R$ ${l.valor}). Caso consolidado, régua mantida.`);
+    await consolidaParcela(sb, casoId, { referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! }, { autor, valor_fonte: "planilha (consolidado)", eventoTexto: `${stamp}: nova parcela em aberto (${l.referencia}, R$ ${l.valor}). Caso consolidado, régua mantida.` });
     n.consolidados++;
   };
 
@@ -134,18 +133,16 @@ async function aplicarInterno(fd: FormData, u: Usuario, clienteForcado: string |
       continue;
     }
     if (l.kind === "novo" || (l.kind === "excecao" && !l.caso_id)) {
-      const base = { fase: "regua" as const, fase_nota: "Régua automática", ultima_mov_em: new Date().toISOString() };
-      const prox = l.kind === "excecao" ? { data: addDias(hoje, regua.excecao?.dias ?? 30), tipo: "decidir" as const, nota: "Revisar exceção: Não cobrar", auto: true } : derivaProxima({ ...base, exc_tipo: null, exc_revisao: null }, regua, hoje);
-      const { data: novo, error } = await sb.from("casos").insert({
-        cliente_id: cid, devedor: l.devedor, documento: l.documento, referencia: l.referencia.split(" - ")[0] || "Título em cobrança", detalhe: l.referencia.split(" - ")[1] ?? null,
-        valor_original: l.valor, valor_atualizado: l.valor, valor_fonte: "planilha", ...base, responsavel: "Ana Paula", ...colunasProxima(prox),
-        ...(l.kind === "excecao" ? colunasExcecao("nao_cobrar", "Planilha: " + (l.situacao || "não cobrar"), hoje, undefined, regua) : {}),
-        telefone: l.telefone || null, email: l.email || null, entrada_em: hoje, pendencias: [],
-      }).select("id").single();
-      if (error) throw new Error(`${l.devedor} (linha ${l.linha}): ${error.message}`);
-      criadosNestaCarga[l.linha] = novo.id;
-      await sb.from("parcelas").insert({ caso_id: novo.id, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento! });
-      await ev(novo.id, "importacao", `Caso aberto via ${stamp}. Primeira notificação agendada na régua.`);
+      let novoId: string;
+      try {
+        novoId = await abreCaso(sb, {
+          cliente_id: cid, devedor: l.devedor, documento: l.documento, referencia: l.referencia, valor: l.valor!, vencimento: l.vencimento!, telefone: l.telefone, email: l.email,
+          responsavel: "Ana Paula", valor_fonte: "planilha", excecao: l.kind === "excecao" ? { motivo: "Planilha: " + (l.situacao || "não cobrar") } : null,
+        }, { regua, hoje, autor, eventoTexto: `Caso aberto via ${stamp}. Primeira notificação agendada na régua.` });
+      } catch (e) {
+        throw new Error(`${l.devedor} (linha ${l.linha}): ${e instanceof Error ? e.message : String(e)}`);
+      }
+      criadosNestaCarga[l.linha] = novoId;
       if (l.kind === "excecao") n.excecoes++; else n.novos++;
     } else if (l.caso_id && l.kind === "consolida") {
       await consolida(l.caso_id, l);

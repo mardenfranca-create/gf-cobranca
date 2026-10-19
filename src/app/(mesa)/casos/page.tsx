@@ -31,7 +31,9 @@ export default async function CasosPage(props: PageProps<"/casos">) {
   };
   return (
     <>
-      <PageHead eyebrow="Casos" titulo="Carteira completa" sub="Todos os clientes ou um só, conforme o filtro no topo. Clique no caso para agir." />
+      <PageHead eyebrow="Casos" titulo="Carteira completa" sub="Todos os clientes ou um só, conforme o filtro no topo. Clique no caso para agir.">
+        <Link className="btn" href={cliente ? `/casos/novo?cliente=${encodeURIComponent(cliente)}` : "/casos/novo"}>Novo caso</Link>
+      </PageHead>
       <form className="toolbar" method="get">
         {cliente && <input type="hidden" name="cliente" value={cliente} />}
         <input type="hidden" name="fase" value={filtro} />

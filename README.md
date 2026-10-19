@@ -95,6 +95,10 @@ src/proxy.ts           renova a sessão e protege rotas
 scripts/               carga inicial
 ```
 
+### Novo caso sem planilha
+
+Em **Casos → Novo caso**, a equipe cadastra um devedor avulso (cliente, devedor, CPF/CNPJ, referência, valor, vencimento, celular, e-mail, responsável). A validação e a gravação são as mesmas da planilha (`src/lib/abertura-caso.ts`): o caso nasce na régua automática com parcela e evento, e o mesmo CPF/CNPJ com caso aberto no cliente recebe a parcela no caso existente em vez de duplicar. Sem celular válido o caso abre, mas a régua de WhatsApp não envia.
+
 ### Telefones a partir de contatos
 
 Em **Importar → Telefones a partir de contatos**, a equipe envia as exportações de contatos (Digisac: Nome, DDI, Telefone, Atendente, Departamento; ou qualquer CSV com nome e telefone), vários arquivos de uma vez. O sistema cruza com os casos abertos: primeiro por telefone já cadastrado, depois pelo nome (segmentos "EMPRESA - CLIENTE - pessoa", nome contido, duas primeiras palavras). Mostra o que vai preencher, o que já está igual, o que tem telefone diferente (só troca com a caixa marcada), os ambíguos (escolha o caso) e os contatos de cobrança sem caso. Cada gravação vira evento interno no caso. Com a caixa "guardar na agenda" marcada, todos os contatos lidos vão para a tabela **contatos** (migration `0008_contatos.sql`): a aba WhatsApp mostra o nome de quem escreve mesmo sem caso.
