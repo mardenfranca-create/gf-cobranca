@@ -16,7 +16,7 @@ export default async function ImportarPage(props: PageProps<"/importar">) {
   const { data: historico } = await sb.from("importacoes").select("*").order("criado_em", { ascending: false }).limit(10);
   return (
     <>
-      <PageHead eyebrow="Importar" titulo="Casos novos e carga inicial" sub="Casos novos entram por planilha, no modelo padrão. A mesma planilha enviada duas vezes não gera nada." />
+      <PageHead eyebrow="Importar" titulo="Casos novos e carga inicial" sub="Casos novos entram por planilha, no modelo padrão. A mesma planilha enviada duas vezes não gera nada. Um devedor só? Use Novo caso, na aba Casos." />
       <div className="grid two" style={{ marginBottom: 16 }}>
         <ImportarPlanilha clientes={clientes.map((c) => ({ id: c.id, nome: c.nome }))} clienteFixo={cliente} />
         <div className="panel">
