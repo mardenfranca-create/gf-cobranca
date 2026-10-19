@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) e `0007_telefone_nono_digito.sql` (nono dígito). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) , `0007_telefone_nono_digito.sql` (nono dígito) e `0008_contatos.sql` (agenda de contatos). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -97,7 +97,7 @@ scripts/               carga inicial
 
 ### Telefones a partir de contatos
 
-Em **Importar → Telefones a partir de contatos**, a equipe envia as exportações de contatos (Digisac: Nome, DDI, Telefone, Atendente, Departamento; ou qualquer CSV com nome e telefone), vários arquivos de uma vez. O sistema cruza com os casos abertos: primeiro por telefone já cadastrado, depois pelo nome (segmentos "EMPRESA - CLIENTE - pessoa", nome contido, duas primeiras palavras). Mostra o que vai preencher, o que já está igual, o que tem telefone diferente (só troca com a caixa marcada), os ambíguos (escolha o caso) e os contatos de cobrança sem caso. Cada gravação vira evento interno no caso.
+Em **Importar → Telefones a partir de contatos**, a equipe envia as exportações de contatos (Digisac: Nome, DDI, Telefone, Atendente, Departamento; ou qualquer CSV com nome e telefone), vários arquivos de uma vez. O sistema cruza com os casos abertos: primeiro por telefone já cadastrado, depois pelo nome (segmentos "EMPRESA - CLIENTE - pessoa", nome contido, duas primeiras palavras). Mostra o que vai preencher, o que já está igual, o que tem telefone diferente (só troca com a caixa marcada), os ambíguos (escolha o caso) e os contatos de cobrança sem caso. Cada gravação vira evento interno no caso. Com a caixa "guardar na agenda" marcada, todos os contatos lidos vão para a tabela **contatos** (migration `0008_contatos.sql`): a aba WhatsApp mostra o nome de quem escreve mesmo sem caso.
 
 ## Modelo de dados
 
@@ -112,6 +112,7 @@ Em **Importar → Telefones a partir de contatos**, a equipe envia as exportaç�
 - **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
 - **mensagens**: WhatsApp enviado (modelo, texto, status de entrega) e recebido (resposta do devedor).
 - **regua**: prazos configuráveis que governam a próxima ação.
+- **contatos**: agenda do escritório (telefone canônico, nome, etiquetas). Alimentada pela importação de contatos; usada pela caixa de entrada do WhatsApp.
 - **acessos**: log imutável de login (e-mail, resultado, IP, cidade, navegador). Só o admin lê.
 
 ## Portal do cliente (etapa 2)
