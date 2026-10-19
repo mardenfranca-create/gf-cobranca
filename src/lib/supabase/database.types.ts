@@ -3,6 +3,7 @@
  * Quando o schema crescer, gere com `supabase gen types typescript` e substitua este arquivo.
  */
 import type { Caso, Cliente, Cobranca, Evento, Mensagem, Parcela, Proposta, ReguaItem, Papel } from "@/lib/domain/types";
+import type { Notificacao } from "@/lib/domain/notificacao";
 
 type Perfil = { id: string; nome: string; papel: Papel; cliente_id: string | null; ativo: boolean; criado_em: string };
 type Ajuste = { id: string; cliente_id: string; autor: string; autor_id: string | null; campo: string; antes: unknown; depois: unknown; criado_em: string };
@@ -35,6 +36,7 @@ export type Database = {
       mensagens: Tabela<Mensagem>;
       acessos: Tabela<Acesso>;
       contatos: Tabela<Contato>;
+      notificacoes: Tabela<Notificacao>;
     };
     Views: Record<string, never>;
     Functions: {

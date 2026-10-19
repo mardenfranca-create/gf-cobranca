@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) , `0007_telefone_nono_digito.sql` (nono dígito) e `0008_contatos.sql` (agenda de contatos). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) , `0007_telefone_nono_digito.sql` (nono dígito) `0008_contatos.sql` (agenda de contatos) e `0010_notificacoes.sql` (notificações extrajudiciais). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -103,6 +103,12 @@ Em **Casos → Novo caso**, a equipe cadastra um devedor avulso (cliente, devedo
 
 Em **Importar → Telefones a partir de contatos**, a equipe envia as exportações de contatos (Digisac: Nome, DDI, Telefone, Atendente, Departamento; ou qualquer CSV com nome e telefone), vários arquivos de uma vez. O sistema cruza com os casos abertos: primeiro por telefone já cadastrado, depois pelo nome (segmentos "EMPRESA - CLIENTE - pessoa", nome contido, duas primeiras palavras). Mostra o que vai preencher, o que já está igual, o que tem telefone diferente (só troca com a caixa marcada), os ambíguos (escolha o caso) e os contatos de cobrança sem caso. Cada gravação vira evento interno no caso. Com a caixa "guardar na agenda" marcada, todos os contatos lidos vão para a tabela **contatos** (migration `0008_contatos.sql`): a aba WhatsApp mostra o nome de quem escreve mesmo sem caso.
 
+### Notificação extrajudicial (aba Notificações)
+
+No caso, a ação **Notificação extrajudicial** gera a minuta com os dados do caso (devedor, documento, credor, parcelas em aberto, valor, prazo) e manda para a fila de revisão do advogado escolhido. Em `/notificacoes/[id]` o advogado edita o texto, preenche nome e OAB, aprova e envia: **WhatsApp com o PDF timbrado em anexo** (modelo `gf_notificacao` na Meta, com cabeçalho de documento; o PDF sai por link com token, por isso defina `APP_URL` na Vercel), ou registra o envio por correio com AR, e-mail ou em mãos. Ao enviar, o caso recebe o evento visível ao cliente e a próxima ação "Fim do prazo da notificação extrajudicial" no prazo escolhido. Requer a migration `0010_notificacoes.sql`.
+
+Modelo a cadastrar na Meta: `gf_notificacao`, categoria Utilidade, pt_BR, **cabeçalho: documento**, corpo: "Olá, {{1}}. Segue em anexo a notificação extrajudicial enviada pelo Gontijo Freitas Advogados em nome de {{2}}, referente a {{3}}. O prazo para regularização ou contato é de {{4}} dias. Para negociar, é só responder aqui."
+
 ## Modelo de dados
 
 - **clientes**: credores (escola, contabilidade, empresa, associação) com alçadas, honorários e prazo de protesto.
@@ -116,6 +122,7 @@ Em **Importar → Telefones a partir de contatos**, a equipe envia as exportaç�
 - **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
 - **mensagens**: WhatsApp enviado (modelo, texto, status de entrega) e recebido (resposta do devedor).
 - **regua**: prazos configuráveis que governam a próxima ação.
+- **notificacoes**: minuta, revisão, aprovação e envio da notificação extrajudicial, com token do PDF.
 - **contatos**: agenda do escritório (telefone canônico, nome, etiquetas). Alimentada pela importação de contatos; usada pela caixa de entrada do WhatsApp.
 - **acessos**: log imutável de login (e-mail, resultado, IP, cidade, navegador). Só o admin lê.
 
