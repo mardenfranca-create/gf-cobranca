@@ -8,6 +8,7 @@ import { agrupaConversas, filtraConversas, fmtTelefone, type CasoResumo } from "
 import { canonizaTelefone, TEMPLATES } from "@/lib/domain/whatsapp";
 import { MENSAGEM_STATUS, type Mensagem } from "@/lib/domain/types";
 import { whatsappEnv } from "@/lib/whatsapp";
+import { estadoRegua } from "@/lib/config/regua";
 import { alternarOptOut, enviarWhatsApp, responderWhatsApp, vincularNumero } from "@/lib/actions/whatsapp";
 import { AutoRefresh, MarcarLida, RolaParaFim } from "@/components/WhatsAppInbox";
 import { PageHead, Pill } from "@/components/ui";
@@ -26,6 +27,8 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
   const busca = str("busca");
   const wa = whatsappEnv();
   const sb = await supabaseServer();
+  const regua = await estadoRegua(sb);
+  const reguaLigada = !regua.pausada && wa.reguaAuto && wa.ok;
 
   const [{ data: msgsRaw, error }, clientes] = await Promise.all([
     sb.from("mensagens").select("*").order("criado_em", { ascending: false }).limit(3000),
@@ -69,7 +72,11 @@ export default async function WhatsAppPage(props: PageProps<"/whatsapp">) {
     <>
       <AutoRefresh />
       <PageHead eyebrow="WhatsApp" titulo="Conversas com os devedores" sub="Tudo que entra e sai pelo número do escritório, em um lugar só. Quem está esperando resposta aparece primeiro. Dentro de 24h da última mensagem do devedor dá para responder livre; fora, só modelo aprovado.">
-        {!wa.ok && <div className="verdict warn">WhatsApp não configurado na Vercel. Dá para ler, mas não enviar.</div>}
+        <div className="actions" style={{ alignItems: "center" }}>
+          {!wa.ok && <div className="verdict warn">WhatsApp não configurado na Vercel. Dá para ler, mas não enviar.</div>}
+          <span className={`pill ${reguaLigada ? "ph-quebra" : "ph-devolvido"}`}>Régua automática {reguaLigada ? "LIGADA" : "pausada"}</span>
+          {u.papel === "admin" && <Link className="btn ghost sm" href="/painel">{reguaLigada ? "Pausar no Painel" : "Painel"}</Link>}
+        </div>
       </PageHead>
       {error && <div className="verdict out" style={{ marginBottom: 12 }}>Não foi possível ler as mensagens: {error.message}. As migrations 0004 e 0006 já foram aplicadas?</div>}
       {ok && <div className="verdict in" style={{ marginBottom: 12 }}>{ok}</div>}

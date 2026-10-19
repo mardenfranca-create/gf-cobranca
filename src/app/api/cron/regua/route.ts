@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { estadoRegua } from "@/lib/config/regua";
 import { whatsappEnv } from "@/lib/whatsapp";
 import { enviaMensagemCaso } from "@/lib/whatsapp-envio";
 import { datasVencimentoLembrete, lembreteDeHoje, MAX_FALHAS_REGUA } from "@/lib/domain/whatsapp";
@@ -22,8 +23,10 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
   if (!secret || auth !== `Bearer ${secret}`) return NextResponse.json({ erro: "não autorizado" }, { status: 401 });
   const env = whatsappEnv();
-  const simular = !env.reguaAuto || !env.ok || req.nextUrl.searchParams.get("simular") === "1";
   const sb = supabaseAdmin();
+  // Duas travas: a variável na Vercel E o botão no Painel (banco). Qualquer uma desligada = só simula.
+  const pausa = await estadoRegua(sb);
+  const simular = !env.reguaAuto || !env.ok || pausa.pausada || req.nextUrl.searchParams.get("simular") === "1";
   const hoje = hojeISO();
   const { data: regua } = await sb.from("regua").select("chave, dias");
   const dias = { notif1: regua?.find((r) => r.chave === "notif1")?.dias ?? 1, recontato: regua?.find((r) => r.chave === "recontato")?.dias ?? 5 };
@@ -71,5 +74,5 @@ export async function GET(req: NextRequest) {
     if (!simular) Object.assign(item, await enviaMensagemCaso(sb, caso, cli[caso.cliente_id] ?? { nome_curto: "o credor" }, "gf_vencimento", { valor: cob.valor, data: cob.vencimento, link: cob.invoice_url }, "cron", "Régua automática"));
     resultado.push(item);
   }
-  return NextResponse.json({ hoje, simulado: simular, regua_automatica: env.reguaAuto, total: resultado.length, enviados: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => r.ok === false).length, itens: resultado });
+  return NextResponse.json({ hoje, simulado: simular, regua_automatica: env.reguaAuto, pausada_no_painel: pausa.pausada, total: resultado.length, enviados: resultado.filter((r) => r.ok).length, falhas: resultado.filter((r) => r.ok === false).length, itens: resultado });
 }
