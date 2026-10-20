@@ -7,17 +7,24 @@ import { brl, compacto, fmtData, fmtDataHora, hojeISO } from "@/lib/domain/datas
 import { carteiraParada, porCliente, produtividade, recuperadoPorMes, rotuloMes, taxaAcordo, tempoAtePagamento, ultimosMeses, type EventoComAutor } from "@/lib/domain/painel";
 import { type Caso, type Cobranca } from "@/lib/domain/types";
 import { navegador, type Acesso } from "@/lib/acessos";
+import { estadoRegua } from "@/lib/config/regua";
+import { whatsappEnv } from "@/lib/whatsapp";
+import { alternarRegua } from "@/lib/actions/configuracoes";
 import { LinkCaso, PageHead, Pill, PillExcecao } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Painel" };
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 
-export default async function PainelPage() {
+export default async function PainelPage(props: PageProps<"/painel">) {
   await exigeAdmin();
+  const sp = await props.searchParams;
+  const aviso = { ok: typeof sp.ok === "string" ? sp.ok : null, erro: typeof sp.erro === "string" ? sp.erro : null };
   const hoje = hojeISO();
   const inicio12 = `${ultimosMeses(hoje, 12)[0]}-01`;
   const sb = await supabaseServer();
+  const [regua, wa] = [await estadoRegua(sb), whatsappEnv()];
+  const reguaLigada = !regua.pausada && wa.reguaAuto && wa.ok;
   const [clientes, { data: casosRaw }, { data: eventosRaw }, { data: cobrancasRaw }, { data: acessosRaw }] = await Promise.all([
     mapaClientes(),
     sb.from("casos").select("*").limit(5000),
@@ -49,6 +56,26 @@ export default async function PainelPage() {
         <div className="actions"><Link className="btn ghost" href="/painel/acessos">Log de acesso</Link></div>
       </PageHead>
 
+      {aviso.ok && <div className="verdict in" style={{ marginBottom: 12 }}>{aviso.ok}</div>}
+      {aviso.erro && <div className="verdict out" style={{ marginBottom: 12 }}>{aviso.erro}</div>}
+      <div className={`panel`} style={{ marginBottom: 16, borderColor: reguaLigada ? "var(--bad)" : "var(--ink-10)" }}>
+        <div className="panel-head" style={{ marginBottom: 6 }}>
+          <h2>Régua automática de WhatsApp: {reguaLigada ? "LIGADA" : "pausada"}</h2>
+          <form action={alternarRegua}>
+            <input type="hidden" name="voltar" value="/painel" />
+            {regua.pausada
+              ? <button className="btn" type="submit" name="acao" value="ligar" disabled={!wa.reguaAuto || !wa.ok}>Ligar a régua</button>
+              : <button className="btn danger" type="submit" name="acao" value="pausar">Pausar agora</button>}
+          </form>
+        </div>
+        <p className="meta" style={{ margin: 0 }}>
+          {regua.pausada
+            ? `Pausada${regua.por ? ` por ${regua.por}` : ""}${regua.em ? ` em ${fmtDataHora(regua.em)}` : ""}. O cron das 9h só simula; nada sai sozinho. Envio manual pelo caso e pela aba WhatsApp continua funcionando.`
+            : `Ligada${regua.por ? ` por ${regua.por}` : ""}${regua.em ? ` em ${fmtDataHora(regua.em)}` : ""}. Lembretes saem nos dias úteis às 9h para casos em "Régua automática".`}
+          {regua.fonte === "sem-tabela" && " Tabela de configurações ainda não existe (migration 0009): tratado como pausada."}
+          {!wa.reguaAuto && " Na Vercel, WHATSAPP_REGUA_AUTOMATICA está desligada: mesmo ligando aqui, o cron só simula."}
+        </p>
+      </div>
       <div className="kpis">
         <div className="kpi"><div className="lbl">Recuperado em {rotuloMes(mesAtual.mes)}</div><div className="val num">{compacto(mesAtual.valor)}</div><div className="foot"><b>{mesAtual.casos}</b> {mesAtual.casos === 1 ? "caso pago" : "casos pagos"} · Asaas {brl(mesAtual.asaas, false)}</div></div>
         <div className="kpi"><div className="lbl">Recuperado em 12 meses</div><div className="val num">{compacto(r12)}</div><div className="foot"><b>{n12}</b> casos · ticket médio {n12 ? brl(r12 / n12, false) : "—"}</div></div>

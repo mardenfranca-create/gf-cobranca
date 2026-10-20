@@ -22,7 +22,7 @@ Next.js 16 (App Router, Server Actions) · Supabase (Postgres, Auth, RLS) · Ver
 ### 1. Banco (Supabase)
 
 1. Projeto Supabase na região **South America (São Paulo)**.
-2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) , `0007_telefone_nono_digito.sql` (nono dígito) `0008_contatos.sql` (agenda de contatos) e `0010_notificacoes.sql` (notificações extrajudiciais). As migrations são reexecutáveis: rodar de novo não apaga nada.
+2. No painel: **SQL Editor → New query**, cole o conteúdo de `supabase/migrations/0001_init.sql` e execute. Depois faça o mesmo com `0002_portal.sql` (etapa 2), `0003_asaas.sql` (etapa 3), `0004_whatsapp.sql` (WhatsApp), `0005_acessos.sql` (log de acesso), `0006_whatsapp_inbox.sql` (caixa de entrada) , `0007_telefone_nono_digito.sql` (nono dígito), `0008_contatos.sql` (agenda de contatos), `0009_configuracoes.sql` (pausa da régua) e `0010_notificacoes.sql` (notificações extrajudiciais). As migrations são reexecutáveis: rodar de novo não apaga nada.
 3. **Authentication → Providers → Email**: deixe "Confirm email" desligado (os usuários são criados pelo admin, não se cadastram).
 4. **Project Settings → API**: anote `Project URL`, `anon public` e `service_role`.
 
@@ -122,6 +122,7 @@ Modelo a cadastrar na Meta: `gf_notificacao`, categoria Utilidade, pt_BR, **cabe
 - **asaas_eventos**: cada evento recebido pelo webhook, uma vez só (idempotência e auditoria).
 - **mensagens**: WhatsApp enviado (modelo, texto, status de entrega) e recebido (resposta do devedor).
 - **regua**: prazos configuráveis que governam a próxima ação.
+- **configuracoes**: chave/valor do sistema. `regua_pausada` é a pausa geral da régua automática (admin liga e pausa pelo Painel).
 - **notificacoes**: minuta, revisão, aprovação e envio da notificação extrajudicial, com token do PDF.
 - **contatos**: agenda do escritório (telefone canônico, nome, etiquetas). Alimentada pela importação de contatos; usada pela caixa de entrada do WhatsApp.
 - **acessos**: log imutável de login (e-mail, resultado, IP, cidade, navegador). Só o admin lê.
@@ -206,7 +207,7 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 3. `/diagnostico`: seção WhatsApp verde. `GET /api/whatsapp/webhook` responde `configurado: true`.
 4. **Assinar a conta ao app** (sem isso a Meta não envia status nem respostas, mesmo com o webhook verificado): logado como admin, abra `/api/whatsapp/assinatura`. Se `assinado: false`, faça um `POST` na mesma URL (no console do navegador: `fetch('/api/whatsapp/assinatura', {method: 'POST'}).then(r => r.json()).then(console.log)`). A WABA é descoberta pelo token; se falhar, defina `WHATSAPP_WABA_ID` (WhatsApp Manager → Identificação da conta) e faça redeploy.
 5. Teste: num caso com celular, *Enviar WhatsApp* → modelo 1º lembrete → o status muda para Entregue/Lida conforme o webhook chega; responda pelo celular e veja a resposta no caso e a tarefa na Fila.
-6. Quando estiver confortável, `WHATSAPP_REGUA_AUTOMATICA=true` + Redeploy liga os lembretes automáticos.
+6. A régua automática tem **duas travas**: a variável `WHATSAPP_REGUA_AUTOMATICA=true` na Vercel e o botão **Ligar a régua** no Painel (admin), guardado no banco (migration `0009_configuracoes.sql`, nasce pausada). Qualquer uma desligada, o cron só simula. Para parar tudo na hora: Painel → **Pausar agora**, sem redeploy.
 
 ### Caixa de entrada (aba WhatsApp na mesa)
 
