@@ -98,3 +98,20 @@ export async function assinaWebhook(): Promise<{ waba: string; ok: boolean }> {
   if (!r.ok || !data?.success) throw new WhatsAppError(descreveErro(r.status, data), r.status, data);
   return { waba, ok: true };
 }
+
+/** Envia um modelo aprovado que tem cabeçalho de DOCUMENTO (PDF por link público). Devolve o wamid. */
+export async function enviaTemplateDocumento(to: string, nome: string, params: string[], doc: { link: string; filename: string }): Promise<string> {
+  const env = whatsappEnv();
+  if (!env.ok) throw new WhatsAppError("WhatsApp não configurado (WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID).", 0);
+  const body = {
+    messaging_product: "whatsapp", to, type: "template",
+    template: { name: nome, language: { code: "pt_BR" }, components: [
+      { type: "header", parameters: [{ type: "document", document: { link: doc.link, filename: doc.filename } }] },
+      ...(params.length ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }] : []),
+    ] },
+  };
+  const r = await fetch(`${env.base}/${env.phoneId}/messages`, { method: "POST", headers: { authorization: `Bearer ${env.token}`, "content-type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+  const data = (await r.json().catch(() => null)) as ({ messages?: { id: string }[] } & GraphErro) | null;
+  if (!r.ok || !data?.messages?.[0]?.id) throw new WhatsAppError(descreveErro(r.status, data), r.status, data);
+  return data.messages[0].id;
+}

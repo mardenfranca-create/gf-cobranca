@@ -6,6 +6,7 @@ import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type Proposta } f
 import * as A from "@/lib/actions/casos";
 import { emitirCobranca, emitirParcelasAcordo } from "@/lib/actions/asaas";
 import { alternarOptOut, enviarWhatsApp, responderWhatsApp } from "@/lib/actions/whatsapp";
+import { gerarNotificacao } from "@/lib/actions/notificacoes";
 import { normalizaCelular, renderiza, TEMPLATES } from "@/lib/domain/whatsapp";
 
 type Acao = { k: string; titulo: string; sub: string; form: ReactNode; danger?: boolean };
@@ -108,6 +109,15 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsa
     acoes.push({ k: "naoconf", titulo: "Não localizado", sub: "Devolve o caso para negociação e avisa o cliente.", danger: true, form: (<form action={A.pagamentoNaoLocalizado} className="act-form">{H}<Campo label="Motivo"><textarea name="motivo" placeholder="Ex.: valor não consta no extrato de set/26 enviado pela secretaria." /></Campo><div className="actions"><Enviar className="btn danger sm">Devolver para negociação</Enviar></div></form>) });
     acoes.push(atribuir);
   } else {
+    acoes.push({ k: "notificacao", titulo: "Notificação extrajudicial", sub: "Gera a minuta com os dados do caso e manda para o advogado revisar, assinar e enviar (WhatsApp com PDF timbrado, ou correio com AR).", form: (
+      <form action={gerarNotificacao} className="act-form">{H}
+        <div className="frow">
+          <Campo label="Quem revisa e assina"><Sel name="revisor" opts={EQUIPE.map((e) => [e, e])} def="Letícia" /></Campo>
+          <Campo label="Prazo para regularizar"><Sel name="prazo_dias" opts={[["5", "5 dias"], ["10", "10 dias"], ["15", "15 dias"], ["30", "30 dias"]]} def="10" /></Campo>
+        </div>
+        <div className="verdict warn">Nada é enviado agora. A minuta vai para a aba Notificações; o devedor só recebe depois da aprovação do advogado.</div>
+        <div className="actions"><Enviar className="btn sm">Gerar minuta</Enviar></div>
+      </form>) });
     if (caso.proxima_data && caso.proxima_data <= hoje) acoes.push({ k: "concluir", titulo: "Concluir tarefa de hoje sem registrar contato", sub: `"${caso.proxima_nota}". Para conferências e acompanhamentos. A régua marca o próximo passo.`, form: (
       <form action={A.concluirTarefa} className="act-form">{H}<input type="hidden" name="voltar" value={`/casos/${caso.id}`} /><Campo label="Observação (interna, opcional)"><div className="inp"><input name="nota" placeholder="Ex.: boleto ainda em aberto, aguardar vencimento" /></div></Campo><div className="actions"><Enviar className="btn sm">Concluir</Enviar></div></form>) });
     acoes.push(contato, agendar, atribuir, excecao);

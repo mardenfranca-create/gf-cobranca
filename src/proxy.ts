@@ -8,7 +8,7 @@ const PUBLIC = ["/login", "/auth"];
  *  A autorização fina (admin/operador/cliente) acontece no servidor, em cada página e ação. */
 export async function proxy(request: NextRequest) {
   // Rotas sem sessão: diagnóstico e webhooks (o Asaas autentica por token próprio na rota).
-  if (request.nextUrl.pathname === "/diagnostico" || /^\/api\/(asaas|whatsapp|cron)\//.test(request.nextUrl.pathname)) return NextResponse.next({ request });
+  if (request.nextUrl.pathname === "/diagnostico" || /^\/api\/(asaas|whatsapp|cron|notificacoes)\//.test(request.nextUrl.pathname)) return NextResponse.next({ request });
   if (!supabaseEnv().ok) {
     return new NextResponse(
       "Configuração incompleta ou inválida das variáveis do Supabase. Abra /diagnostico para ver o que está errado.",
