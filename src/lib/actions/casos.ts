@@ -5,11 +5,12 @@ import { exigeEquipe } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { listaCasos, listaClientes, listaRegua, parcelasDosCasos } from "@/lib/data";
 import { abreCaso, consolidaParcela } from "@/lib/abertura-caso";
-import { normalizaNovoCaso, type CamposNovoCaso } from "@/lib/domain/novo-caso";
+import { normalizaNovoCaso, parseValorForm, type CamposNovoCaso } from "@/lib/domain/novo-caso";
 import { reconcilia } from "@/lib/domain/reconcile";
 import { addDias, brl, fmtData, hojeISO } from "@/lib/domain/datas";
 import { confereAlcada } from "@/lib/domain/alcada";
 import { colunasExcecao, colunasProxima, derivaProxima, mapaRegua, marca, type ProximaAcao } from "@/lib/domain/regua";
+import { descreveParcela, desfechoSemAbertas, recalculaValores, situacaoParcela, validaParcela } from "@/lib/domain/parcelas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type TipoExcecao, type TipoFollowup } from "@/lib/domain/types";
 
 type Patch = Omit<Partial<Caso>, "id" | "documento_digits" | "cliente_id">;
@@ -280,4 +281,138 @@ export async function novoCaso(_prev: EstadoNovoCaso, fd: FormData): Promise<Est
   }
   revalidatePath("/", "layout");
   redirect(destino);
+}
+
+/* ---------- Editar caso e parcelas (o cliente avisa que já pagou ou pede para não cobrar) ---------- */
+
+const erroVolta = (id: string, msg: string): never => redirect(`/casos/${id}/editar?erro=${encodeURIComponent(msg)}`);
+
+/** Cadastro completo do caso: devedor, referência, detalhe, documento, contato e, se informado, o valor em aberto. */
+export async function editarCaso(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const devedor = s(fd, "devedor");
+  if (!devedor) erroVolta(id, "Informe o nome do devedor.");
+  const valorTxt = s(fd, "valor");
+  const valor = valorTxt ? parseValorForm(valorTxt) : null;
+  if (valorTxt && (valor == null || valor < 0)) erroVolta(id, "Valor em aberto inválido.");
+  await aplica(id, ({ caso }) => {
+    const patch: Patch = {
+      devedor,
+      referencia: s(fd, "referencia") || caso.referencia,
+      detalhe: s(fd, "detalhe") || null,
+      documento: s(fd, "documento") || null,
+      telefone: s(fd, "telefone") || null,
+      email: s(fd, "email") || null,
+    };
+    const mudou: string[] = [];
+    if (patch.devedor !== caso.devedor) mudou.push(`devedor "${caso.devedor}" → "${patch.devedor}"`);
+    if (patch.referencia !== caso.referencia) mudou.push(`referência "${caso.referencia}" → "${patch.referencia}"`);
+    if ((patch.detalhe ?? null) !== (caso.detalhe ?? null)) mudou.push("detalhe");
+    if ((patch.documento ?? null) !== (caso.documento ?? null)) mudou.push(`documento ${patch.documento ?? "removido"}`);
+    if ((patch.telefone ?? null) !== (caso.telefone ?? null)) mudou.push(`telefone ${patch.telefone ?? "removido"}`);
+    if ((patch.email ?? null) !== (caso.email ?? null)) mudou.push(`e-mail ${patch.email ?? "removido"}`);
+    if (valor != null && valor !== caso.valor_atualizado) {
+      patch.valor_atualizado = valor;
+      patch.valor_fonte = "cadastro manual";
+      mudou.push(`valor em aberto ${brl(caso.valor_atualizado)} → ${brl(valor)}`);
+    }
+    patch.pendencias = (caso.pendencias ?? []).filter((p) => !(patch.documento && p === "sem CPF/CNPJ") && !((patch.telefone || patch.email) && p === "sem contato") && !(patch.valor_atualizado != null && p === "sem valor"));
+    return { patch, evento: mudou.length ? { tipo: "cadastro", texto: `Caso editado: ${mudou.join(" · ")}.`, visivel_cliente: false } : null };
+  });
+  redirect(`/casos/${id}?ok=${encodeURIComponent("Caso atualizado.")}`);
+}
+
+type ParcelaLinha = { id: string; caso_id: string; referencia: string; valor: number; vencimento: string; paga: boolean; paga_em: string | null; retirada_em: string | null; retirada_motivo: string | null };
+
+async function parcelasDoCaso(sb: Awaited<ReturnType<typeof supabaseServer>>, casoId: string): Promise<ParcelaLinha[]> {
+  const { data, error } = await sb.from("parcelas").select("*").eq("caso_id", casoId).order("vencimento");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ParcelaLinha[];
+}
+
+/**
+ * Depois de mexer nas parcelas, o valor do caso volta a ser a soma do que está em aberto e,
+ * se não sobrou parcela aberta, o caso encerra (pago ou devolvido). Grava o evento informado.
+ */
+async function refleteParcelasNoCaso(casoId: string, evento: { tipo: string; texto: string; visivel_cliente?: boolean }) {
+  const sb = await supabaseServer();
+  const parcelas = await parcelasDoCaso(sb, casoId);
+  await aplica(casoId, ({ caso }) => {
+    const valores = recalculaValores(parcelas);
+    const patch: Patch = { ...valores, valor_fonte: "parcelas (editadas pela mesa)" };
+    patch.pendencias = (caso.pendencias ?? []).filter((p) => p !== "sem valor");
+    const desfecho = desfechoSemAbertas(parcelas);
+    let texto = evento.texto + ` Valor em aberto: ${brl(valores.valor_atualizado)}.`;
+    if (desfecho && !["pago", "devolvido"].includes(caso.fase)) {
+      Object.assign(patch, { fase: desfecho, acordo: null, ...prox(null), ...colunasExcecao(null, "", "") });
+      texto += desfecho === "pago" ? " Nenhuma parcela em aberto: caso encerrado como pago." : " Nenhuma parcela em cobrança: caso devolvido ao cliente.";
+    }
+    return { patch, evento: { ...evento, texto } };
+  });
+}
+
+/** Corrige referência, valor ou vencimento de uma parcela (erro de digitação ou planilha errada). */
+export async function editarParcela(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const parcelaId = s(fd, "parcela_id");
+  const v = validaParcela({ referencia: s(fd, "referencia"), valor: s(fd, "valor"), vencimento: s(fd, "vencimento") });
+  if (v.erros.length) erroVolta(id, `Parcela não salva: ${v.erros.join("; ")}.`);
+  await exigeEquipe();
+  const sb = await supabaseServer();
+  const antes = (await parcelasDoCaso(sb, id)).find((p) => p.id === parcelaId);
+  if (!antes) return erroVolta(id, "Parcela não encontrada.");
+  const { error } = await sb.from("parcelas").update(v.dados).eq("id", parcelaId).eq("caso_id", id);
+  if (error) erroVolta(id, error.code === "23505" ? "Já existe uma parcela com essa referência e vencimento neste caso." : error.message);
+  await refleteParcelasNoCaso(id, { tipo: "cadastro", texto: `Parcela corrigida: ${descreveParcela(antes)} → ${descreveParcela(v.dados)}.`, visivel_cliente: false });
+  redirect(`/casos/${id}/editar?ok=${encodeURIComponent("Parcela corrigida.")}`);
+}
+
+/**
+ * Baixa uma parcela como paga (o cliente confirmou que recebeu) ou a retira da cobrança (o cliente pediu
+ * para não cobrar). "Reabrir" desfaz qualquer uma das duas. Fica no histórico visível ao cliente.
+ */
+export async function baixarParcela(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const parcelaId = s(fd, "parcela_id");
+  const acao = s(fd, "acao");
+  await exigeEquipe();
+  const sb = await supabaseServer();
+  const p = (await parcelasDoCaso(sb, id)).find((x) => x.id === parcelaId);
+  if (!p) return erroVolta(id, "Parcela não encontrada.");
+  const hoje = hojeISO();
+  let patch: Partial<ParcelaLinha>;
+  let texto: string;
+  let ok: string;
+  if (acao === "paga") {
+    const em = dataOu(s(fd, "paga_em"), hoje);
+    patch = { paga: true, paga_em: em, retirada_em: null, retirada_motivo: null };
+    texto = `Parcela ${descreveParcela(p)} baixada como paga em ${fmtData(em)}, conforme informado pelo cliente.`;
+    ok = "Parcela baixada como paga.";
+  } else if (acao === "retirada") {
+    const motivo = s(fd, "motivo") || "a pedido do cliente";
+    patch = { paga: false, paga_em: null, retirada_em: hoje, retirada_motivo: motivo };
+    texto = `Parcela ${descreveParcela(p)} retirada da cobrança: ${motivo}.`;
+    ok = "Parcela retirada da cobrança.";
+  } else if (acao === "reabrir") {
+    patch = { paga: false, paga_em: null, retirada_em: null, retirada_motivo: null };
+    texto = `Parcela ${descreveParcela(p)} reaberta para cobrança (estava ${situacaoParcela(p) === "paga" ? "baixada como paga" : "retirada da cobrança"}).`;
+    ok = "Parcela reaberta.";
+  } else return erroVolta(id, "Ação inválida.");
+  const { error } = await sb.from("parcelas").update(patch).eq("id", parcelaId).eq("caso_id", id);
+  if (error) erroVolta(id, error.message);
+  await refleteParcelasNoCaso(id, { tipo: acao === "paga" ? "pagamento" : "cadastro", texto, visivel_cliente: true });
+  redirect(`/casos/${id}/editar?ok=${encodeURIComponent(ok)}`);
+}
+
+/** Inclui uma competência que ficou de fora (mesma regra da consolidação por planilha: referência + vencimento únicos). */
+export async function adicionarParcela(fd: FormData) {
+  const id = s(fd, "caso_id");
+  const v = validaParcela({ referencia: s(fd, "referencia"), valor: s(fd, "valor"), vencimento: s(fd, "vencimento") });
+  if (v.erros.length) erroVolta(id, `Parcela não incluída: ${v.erros.join("; ")}.`);
+  await exigeEquipe();
+  const sb = await supabaseServer();
+  const { error } = await sb.from("parcelas").insert({ caso_id: id, ...v.dados });
+  if (error) erroVolta(id, error.code === "23505" ? "Essa parcela (referência + vencimento) já está no caso." : error.message);
+  await refleteParcelasNoCaso(id, { tipo: "cadastro", texto: `Parcela incluída pela mesa: ${descreveParcela(v.dados)}.`, visivel_cliente: true });
+  redirect(`/casos/${id}/editar?ok=${encodeURIComponent("Parcela incluída.")}`);
 }

@@ -116,6 +116,10 @@ export type Parcela = {
   valor: number;
   vencimento: string;
   paga: boolean;
+  paga_em: string | null;
+  /** Retirada da cobrança a pedido do cliente (migration 0011). */
+  retirada_em: string | null;
+  retirada_motivo: string | null;
 };
 
 export type Proposta = {

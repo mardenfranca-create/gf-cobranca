@@ -10,6 +10,8 @@ import { asaasEnv } from "@/lib/asaas";
 import { whatsappEnv } from "@/lib/whatsapp";
 import { MensagensCaso } from "@/components/MensagensCaso";
 import { Pill, PillExcecao } from "@/components/ui";
+import Link from "next/link";
+import { SITUACAO_PARCELA, situacaoParcela, totaisParcelas } from "@/lib/domain/parcelas";
 
 export const metadata: Metadata = { title: "Caso" };
 
@@ -41,6 +43,7 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
             {caso.fase_nota && <span className="meta">{caso.fase_nota}</span>}
           </div>
         </div>
+        <Link className="btn ghost" href={`/casos/${caso.id}/editar`}>Editar caso</Link>
       </div>
       {aviso && <div className={`verdict ${aviso.cls}`} style={{ marginBottom: 14 }}>{aviso.msg}</div>}
       <div className="caso-grid">
@@ -81,11 +84,16 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
           </div>
           <CobrancasCaso cobrancas={cobrancas} casoId={caso.id} mesa />
           <MensagensCaso mensagens={mensagens} mesa />
-          {parcelas.length > 0 && (
-            <div className="panel"><p className="sec-t">Parcelas consolidadas ({parcelas.length})</p>
-              <dl className="dl">{parcelas.map((p) => <span key={p.id} style={{ display: "contents" }}><dt>{p.referencia}</dt><dd className="num">{brl(p.valor)} · venc. {fmtData(p.vencimento)}{p.paga ? " · paga" : ""}</dd></span>)}</dl>
-            </div>
-          )}
+          {parcelas.length > 0 && (() => {
+            const t = totaisParcelas(parcelas);
+            return (
+              <div className="panel">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><p className="sec-t">Parcelas consolidadas ({parcelas.length})</p><Link className="meta" href={`/casos/${caso.id}/editar#parcelas`} style={{ color: "var(--bronze-dark)" }}>editar</Link></div>
+                <dl className="dl">{parcelas.map((p) => { const sit = situacaoParcela(p); return <span key={p.id} style={{ display: "contents", opacity: sit === "aberta" ? 1 : 0.6 }}><dt>{p.referencia}</dt><dd className="num" style={sit === "retirada" ? { textDecoration: "line-through" } : undefined}>{brl(p.valor)} · venc. {fmtData(p.vencimento)}{sit === "paga" ? ` · paga${p.paga_em ? " em " + fmtData(p.paga_em) : ""}` : sit === "retirada" ? " · retirada" : ""}</dd></span>; })}</dl>
+                {(t.pagas > 0 || t.retiradas > 0) && <p className="meta" style={{ marginTop: 8 }}>Em aberto {brl(t.aberto)}{t.pagas > 0 ? ` · pagas ${brl(t.pago)}` : ""}{t.retiradas > 0 ? ` · ${SITUACAO_PARCELA.retirada} ${brl(t.retirado)}` : ""}</p>}
+              </div>
+            );
+          })()}
           <div className="panel">
             <p className="sec-t">Histórico</p>
             <ol className="tl">

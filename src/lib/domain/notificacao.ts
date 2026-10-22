@@ -1,5 +1,6 @@
 /** Notificação extrajudicial: minuta gerada a partir do caso. Puro. O advogado edita antes de aprovar. */
 import { brl, fmtData } from "./datas";
+import { parcelaAberta } from "@/lib/domain/parcelas";
 import type { Caso, Cliente, Parcela } from "./types";
 
 export type Notificacao = {
@@ -40,7 +41,7 @@ const tipoDoc = (doc: string | null) => { const d = (doc ?? "").replace(/\D/g, "
 export function minutaNotificacao(p: { caso: Caso; cliente: Cliente; parcelas: Parcela[]; prazoDias: number; hoje: string; cidade?: string }): { titulo: string; corpo: string } {
   const { caso, cliente, parcelas, prazoDias, hoje } = p;
   const valor = caso.valor_atualizado ?? caso.valor_original;
-  const abertas = parcelas.filter((x) => !x.paga);
+  const abertas = parcelas.filter(parcelaAberta);
   const doc = tipoDoc(caso.documento);
   const pessoaJuridica = doc === "CNPJ";
   const tratamento = pessoaJuridica ? "V.Sas." : "V.Sa.";
