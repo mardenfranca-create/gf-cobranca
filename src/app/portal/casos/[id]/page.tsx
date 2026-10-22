@@ -86,7 +86,7 @@ export default async function CasoPortalPage(props: PageProps<"/portal/casos/[id
           <MensagensCaso mensagens={mensagens.filter((m) => m.status !== "failed")} mesa={false} />
           {parcelas.length > 0 && (
             <div className="panel"><p className="sec-t">Parcelas em cobrança ({parcelas.length})</p>
-              <dl className="dl">{parcelas.map((p) => <span key={p.id} style={{ display: "contents" }}><dt>{p.referencia}</dt><dd className="num">{brl(p.valor)} · venc. {fmtData(p.vencimento)}{p.paga ? " · paga" : ""}</dd></span>)}</dl>
+              <dl className="dl">{parcelas.map((p) => <span key={p.id} style={{ display: "contents" }}><dt>{p.referencia}</dt><dd className="num" style={p.retirada_em ? { textDecoration: "line-through", opacity: 0.6 } : undefined}>{brl(p.valor)} · venc. {fmtData(p.vencimento)}{p.paga ? " · paga" : p.retirada_em ? " · retirada da cobrança a seu pedido" : ""}</dd></span>)}</dl>
             </div>
           )}
           <div className="panel">

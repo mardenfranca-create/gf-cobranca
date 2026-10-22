@@ -27,7 +27,7 @@ export type Database = {
       perfis: Tabela<Perfil>;
       regua: Tabela<ReguaItem>;
       casos: Tabela<Caso & { criado_em: string; atualizado_em: string }, "documento_digits">;
-      parcelas: Tabela<Parcela & { paga_em: string | null; criado_em: string }>;
+      parcelas: Tabela<Parcela & { criado_em: string }>;
       eventos: Tabela<Evento & { autor_id: string | null; dados: Record<string, unknown> | null }>;
       propostas: Tabela<Proposta & { decidida_por: string | null; decidida_em: string | null }>;
       importacoes: Tabela<Importacao>;

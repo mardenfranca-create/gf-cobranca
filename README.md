@@ -99,6 +99,10 @@ scripts/               carga inicial
 
 Em **Casos → Novo caso**, a equipe cadastra um devedor avulso (cliente, devedor, CPF/CNPJ, referência, valor, vencimento, celular, e-mail, responsável). A validação e a gravação são as mesmas da planilha (`src/lib/abertura-caso.ts`): o caso nasce na régua automática com parcela e evento, e o mesmo CPF/CNPJ com caso aberto no cliente recebe a parcela no caso existente em vez de duplicar. Sem celular válido o caso abre, mas a régua de WhatsApp não envia.
 
+### Editar caso e parcelas
+
+Em **Casos → caso → Editar caso** (`/casos/[id]/editar`) a equipe corrige o cadastro (devedor, referência, detalhe, CPF/CNPJ, telefone, e-mail, valor em aberto) e mexe nas parcelas consolidadas, que é o pedido mais comum do cliente credor: *"essa mensalidade já foi paga"* ou *"não cobre essa"*. Cada parcela pode ser **corrigida** (referência, valor, vencimento), **baixada como paga** (com a data), **retirada da cobrança** (com o motivo, visível ao cliente) ou **reaberta**; também dá para **incluir** uma competência que ficou de fora. A parcela não é apagada: a próxima importação da planilha reconhece referência + vencimento e não a recria. Depois de qualquer mudança o valor em aberto do caso vira a soma das parcelas abertas (`src/lib/domain/parcelas.ts`) e, se não sobrar parcela aberta, o caso encerra sozinho: *pago* se alguma foi paga, *devolvido* se todas foram retiradas. Cobranças já emitidas no Asaas não são canceladas automaticamente; use o botão da cobrança. Requer a migration `0011_parcelas_edicao.sql`.
+
 ### Telefones a partir de contatos
 
 Em **Importar → Telefones a partir de contatos**, a equipe envia as exportações de contatos (Digisac: Nome, DDI, Telefone, Atendente, Departamento; ou qualquer CSV com nome e telefone), vários arquivos de uma vez. O sistema cruza com os casos abertos: primeiro por telefone já cadastrado, depois pelo nome (segmentos "EMPRESA - CLIENTE - pessoa", nome contido, duas primeiras palavras). Mostra o que vai preencher, o que já está igual, o que tem telefone diferente (só troca com a caixa marcada), os ambíguos (escolha o caso) e os contatos de cobrança sem caso. Cada gravação vira evento interno no caso. Com a caixa "guardar na agenda" marcada, todos os contatos lidos vão para a tabela **contatos** (migration `0008_contatos.sql`): a aba WhatsApp mostra o nome de quem escreve mesmo sem caso.
@@ -113,7 +117,7 @@ Modelo a cadastrar na Meta: `gf_notificacao`, categoria Utilidade, pt_BR, **cabe
 
 - **clientes**: credores (escola, contabilidade, empresa, associação) com alçadas, honorários e prazo de protesto.
 - **casos**: uma dívida consolidada por cliente + devedor. Fase, responsável, próxima ação (obrigatória quando aberto), exceção (pausa a régua com data de revisão).
-- **parcelas**: competências consolidadas no caso (únicas por referência + vencimento).
+- **parcelas**: competências consolidadas no caso (únicas por referência + vencimento). Situação: aberta, paga (`paga_em`) ou retirada da cobrança (`retirada_em`, `retirada_motivo`, migration 0011).
 - **eventos**: histórico imutável (trigger bloqueia update/delete), com flag de visibilidade para o cliente.
 - **propostas**: termos, dentro/fora da alçada, status.
 - **importacoes**: hash único por planilha.
