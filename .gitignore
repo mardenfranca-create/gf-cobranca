@@ -42,3 +42,9 @@ next-env.d.ts
 
 # modelo de variáveis é versionado
 !.env.example
+
+# Graphify (grafo local do código)
+graphify-out/
+
+# Conferências com dados de cliente (telefones): nunca versionar, o repositório é público
+docs/conferencia-telefones-*.md
