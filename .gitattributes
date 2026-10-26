@@ -1,0 +1,2 @@
+# Arquivos que vão para o VPS (Linux) nunca podem ganhar CRLF no checkout do Windows
+deploy/*.cron text eol=lf
