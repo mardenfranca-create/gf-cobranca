@@ -1,0 +1,4 @@
+# Aquecimento da função da Vercel do gf-cobranca. Instalar no VPS (gfa-worker) em /etc/cron.d/gf-cobranca-aquecer.
+# A Vercel desliga a função depois de alguns minutos sem uso e a próxima abertura paga 1 a 2 s a mais.
+# O VPS está em America/Sao_Paulo: 7h-20h, segunda a sábado, a cada 4 minutos.
+*/4 7-20 * * 1-6 root curl -s -o /dev/null -m 20 https://gf-cobranca.vercel.app/api/ping

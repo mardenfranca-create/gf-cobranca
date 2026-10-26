@@ -7,8 +7,8 @@ const PUBLIC = ["/login", "/auth"];
 /** Renova a sessão do Supabase a cada request e protege as rotas da mesa e do portal.
  *  A autorização fina (admin/operador/cliente) acontece no servidor, em cada página e ação. */
 export async function proxy(request: NextRequest) {
-  // Rotas sem sessão: diagnóstico e webhooks (o Asaas autentica por token próprio na rota).
-  if (request.nextUrl.pathname === "/diagnostico" || /^\/api\/(asaas|whatsapp|cron|notificacoes)\//.test(request.nextUrl.pathname)) return NextResponse.next({ request });
+  // Rotas sem sessão: diagnóstico, webhooks (o Asaas autentica por token próprio na rota) e o ping de aquecimento.
+  if (request.nextUrl.pathname === "/diagnostico" || /^\/api\/(asaas|whatsapp|cron|notificacoes|ping)(\/|$)/.test(request.nextUrl.pathname)) return NextResponse.next({ request });
   if (!supabaseEnv().ok) {
     return new NextResponse(
       "Configuração incompleta ou inválida das variáveis do Supabase. Abra /diagnostico para ver o que está errado.",
