@@ -1,15 +1,36 @@
 import { addDias, diffDias } from "./datas";
 import { montaFila, type Tarefa } from "./fila";
-import { isAberto, type Caso, type Cliente, type Parcela, type Proposta } from "./types";
+import { isAberto, type Caso, type Cliente, type Cobranca, type Parcela, type Proposta } from "./types";
 
 /**
  * Leitura para o agente de Cobrança do OpenClaw (GET /api/agente/excecoes).
  * Puro: recebe o que a rota carregou do banco e devolve só o que exige atenção.
  * A fila vem de `montaFila` (a mesma da tela /fila), para o agente e a Ana verem a mesma coisa.
+ *
+ * Vencimentos vêm de duas fontes: `parcelas` (títulos cobrados, importados do cliente) e `cobrancas`
+ * (boletos/Pix emitidos no Asaas, onde ficam as parcelas dos acordos).
  */
 
 /** Quatro anos (com um dia bissexto) a partir do vencimento: só sinaliza, não calcula prazo prescricional. */
 export const DIAS_ATENCAO_PRESCRICAO = 4 * 365 + 1;
+
+/** Status do Asaas que encerram a cobrança (paga, devolvida ou cancelada). */
+const COBRANCA_FECHADA = new Set([
+  "RECEIVED",
+  "CONFIRMED",
+  "RECEIVED_IN_CASH",
+  "DUNNING_RECEIVED",
+  "REFUNDED",
+  "REFUND_REQUESTED",
+  "REFUND_IN_PROGRESS",
+  "CHARGEBACK_DONE",
+  "DELETED",
+  "CANCELLED",
+]);
+
+export function cobrancaEmAberto(c: Pick<Cobranca, "status" | "pago_em">): boolean {
+  return !c.pago_em && !COBRANCA_FECHADA.has(c.status);
+}
 
 export type ItemAgente = {
   caso_id: string;
@@ -24,10 +45,17 @@ export type ItemAgente = {
 
 export type Leitura = {
   hoje: string;
-  resumo: { casos_abertos: number; valor_aberto: number; tarefas: number; por_grupo: Record<string, number> };
+  resumo: {
+    casos_abertos: number;
+    valor_aberto: number;
+    tarefas: number;
+    por_grupo: Record<string, number>;
+    /** Casos abertos sem nenhum vencimento cadastrado (nem parcela nem cobrança): a prescrição não pode ser avaliada neles. */
+    casos_sem_vencimento: number;
+  };
   fila: (ItemAgente & { grupo: Tarefa["g"]; prioridade: Tarefa["p"]; titulo: string; descricao: string })[];
-  atencao_prescricao: (ItemAgente & { vencimento_mais_antigo: string; anos: number })[];
-  acordo_em_atraso: (ItemAgente & { parcelas_vencidas: number; valor_vencido: number; vencimento_mais_antigo: string })[];
+  atencao_prescricao: (ItemAgente & { vencimento_mais_antigo: string; anos: number; fonte: "parcela" | "cobranca" })[];
+  acordo_em_atraso: (ItemAgente & { parcelas_vencidas: number; valor_vencido: number; vencimento_mais_antigo: string; fonte: "parcelas" | "asaas" | "ambos" })[];
   propostas_aguardando_cliente: (ItemAgente & { proposta_total: number; enviada_em: string; dias: number })[];
 };
 
@@ -49,12 +77,15 @@ function item(c: Caso, clientes: Record<string, Cliente>, hoje: string): ItemAge
 const porValor = <T extends { valor: number | null; dias_sem_movimento: number }>(a: T, b: T) =>
   (b.valor ?? 0) - (a.valor ?? 0) || b.dias_sem_movimento - a.dias_sem_movimento;
 
+type Vencimento = { caso_id: string; vencimento: string; valor: number; fonte: "parcela" | "cobranca" };
+
 export function leituraAgente(
   casos: Caso[],
   clientes: Record<string, Cliente>,
   parcelas: Parcela[],
   propostas: Proposta[],
   hoje: string,
+  cobrancas: Cobranca[] = [],
 ): Leitura {
   const abertos = casos.filter(isAberto);
   const porId = new Map(abertos.map((c) => [c.id, c]));
@@ -66,36 +97,47 @@ export function leituraAgente(
   const por_grupo: Record<string, number> = {};
   for (const t of tarefas) por_grupo[t.g] = (por_grupo[t.g] ?? 0) + 1;
 
-  // Parcelas em aberto (não pagas e não retiradas), agrupadas por caso aberto.
-  const emAberto = new Map<string, Parcela[]>();
+  // Casos com algum vencimento cadastrado (aberto ou não): o resto não tem como ser avaliado para prescrição.
+  const comVencimento = new Set<string>();
+  // Vencimentos em aberto, por caso aberto.
+  const emAberto = new Map<string, Vencimento[]>();
+  const anotar = (v: Vencimento) => (emAberto.get(v.caso_id) ?? emAberto.set(v.caso_id, []).get(v.caso_id)!).push(v);
   for (const p of parcelas) {
-    if (p.paga || p.retirada_em || !porId.has(p.caso_id)) continue;
-    (emAberto.get(p.caso_id) ?? emAberto.set(p.caso_id, []).get(p.caso_id)!).push(p);
+    if (!porId.has(p.caso_id)) continue;
+    comVencimento.add(p.caso_id);
+    if (!p.paga && !p.retirada_em) anotar({ caso_id: p.caso_id, vencimento: p.vencimento, valor: p.valor, fonte: "parcela" });
+  }
+  for (const c of cobrancas) {
+    if (!porId.has(c.caso_id)) continue;
+    comVencimento.add(c.caso_id);
+    if (cobrancaEmAberto(c)) anotar({ caso_id: c.caso_id, vencimento: c.vencimento, valor: c.valor, fonte: "cobranca" });
   }
 
   const limitePrescricao = addDias(hoje, -DIAS_ATENCAO_PRESCRICAO);
   const atencao_prescricao: Leitura["atencao_prescricao"] = [];
   const acordo_em_atraso: Leitura["acordo_em_atraso"] = [];
-  for (const [casoId, ps] of emAberto) {
+  for (const [casoId, vs] of emAberto) {
     const c = porId.get(casoId)!;
-    const maisAntiga = ps.reduce((m, p) => (p.vencimento < m ? p.vencimento : m), ps[0].vencimento);
-    if (maisAntiga <= limitePrescricao && c.exc_tipo !== "prescrito") {
+    const maisAntigo = vs.reduce((m, v) => (v.vencimento < m.vencimento ? v : m), vs[0]);
+    if (maisAntigo.vencimento <= limitePrescricao && c.exc_tipo !== "prescrito") {
       atencao_prescricao.push({
         ...item(c, clientes, hoje),
-        vencimento_mais_antigo: maisAntiga,
-        anos: Math.floor(diffDias(hoje, maisAntiga) / 365.25),
+        vencimento_mais_antigo: maisAntigo.vencimento,
+        anos: Math.floor(diffDias(hoje, maisAntigo.vencimento) / 365.25),
+        fonte: maisAntigo.fonte,
       });
     }
-    if (c.fase === "acordo") {
-      const vencidas = ps.filter((p) => p.vencimento < hoje);
-      if (vencidas.length) {
-        acordo_em_atraso.push({
-          ...item(c, clientes, hoje),
-          parcelas_vencidas: vencidas.length,
-          valor_vencido: Math.round(vencidas.reduce((s, p) => s + p.valor, 0) * 100) / 100,
-          vencimento_mais_antigo: vencidas.reduce((m, p) => (p.vencimento < m ? p.vencimento : m), vencidas[0].vencimento),
-        });
-      }
+    // Acordo: parcelas do acordo (Asaas) vencidas, em qualquer fase aberta; parcelas importadas só contam na fase "acordo".
+    const vencidas = vs.filter((v) => v.vencimento < hoje && (v.fonte === "cobranca" || c.fase === "acordo"));
+    if (vencidas.length && (c.fase === "acordo" || vencidas.some((v) => v.fonte === "cobranca"))) {
+      const fontes = new Set(vencidas.map((v) => v.fonte));
+      acordo_em_atraso.push({
+        ...item(c, clientes, hoje),
+        parcelas_vencidas: vencidas.length,
+        valor_vencido: Math.round(vencidas.reduce((s, v) => s + v.valor, 0) * 100) / 100,
+        vencimento_mais_antigo: vencidas.reduce((m, v) => (v.vencimento < m ? v.vencimento : m), vencidas[0].vencimento),
+        fonte: fontes.size === 2 ? "ambos" : fontes.has("cobranca") ? "asaas" : "parcelas",
+      });
     }
   }
 
@@ -115,6 +157,7 @@ export function leituraAgente(
       valor_aberto: Math.round(abertos.reduce((s, c) => s + (valorDe(c) ?? 0), 0) * 100) / 100,
       tarefas: tarefas.length,
       por_grupo,
+      casos_sem_vencimento: abertos.filter((c) => !comVencimento.has(c.id)).length,
     },
     fila,
     atencao_prescricao: atencao_prescricao.sort(porValor),
