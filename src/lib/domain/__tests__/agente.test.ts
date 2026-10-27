@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { leituraAgente } from "../agente";
-import type { Caso, Cliente, Parcela, Proposta } from "../types";
+import type { Caso, Cliente, Cobranca, Parcela, Proposta } from "../types";
 
 const HOJE = "2026-10-27";
 
@@ -91,6 +91,40 @@ describe("leitura do agente de Cobrança", () => {
     );
     expect(l.acordo_em_atraso).toHaveLength(1);
     expect(l.acordo_em_atraso[0]).toMatchObject({ parcelas_vencidas: 2, valor_vencido: 400, vencimento_mais_antigo: "2026-09-10" });
+  });
+
+  it("acordo em atraso pelas cobranças do Asaas, ignorando as pagas e canceladas", () => {
+    const cob = (p: Partial<Cobranca> & { vencimento: string; status: string }): Cobranca =>
+      ({ id: `c-${p.vencimento}-${p.status}`, caso_id: "asa", asaas_id: `pay_${p.vencimento}`, tipo: "parcela", parcela_n: 1, parcelas: 3, valor: 300,
+         invoice_url: null, boleto_url: null, pix_copia: null, valor_pago: null, pago_em: null, criado_por: "x", criado_em: "2026-08-01T00:00:00Z", ...p }) as Cobranca;
+    const l = leituraAgente(
+      [caso({ id: "asa", fase: "acordo", acordo: { parc: 3, paid: 1, next: "2026-09-15" } })],
+      clientes,
+      [],
+      [],
+      HOJE,
+      [
+        cob({ vencimento: "2026-08-15", status: "RECEIVED", pago_em: "2026-08-15T10:00:00Z" }),
+        cob({ vencimento: "2026-09-15", status: "OVERDUE" }),
+        cob({ vencimento: "2026-10-15", status: "PENDING" }),
+        cob({ vencimento: "2026-10-01", status: "DELETED" }),
+        cob({ vencimento: "2026-11-15", status: "PENDING" }),
+      ],
+    );
+    expect(l.acordo_em_atraso).toHaveLength(1);
+    expect(l.acordo_em_atraso[0]).toMatchObject({ parcelas_vencidas: 2, valor_vencido: 600, vencimento_mais_antigo: "2026-09-15", fonte: "asaas" });
+    expect(l.resumo.casos_sem_vencimento).toBe(0);
+  });
+
+  it("conta os casos abertos sem nenhum vencimento cadastrado", () => {
+    const l = leituraAgente(
+      [caso({ id: "com" }), caso({ id: "sem1" }), caso({ id: "sem2" })],
+      clientes,
+      [parcela({ caso_id: "com", vencimento: "2026-01-01", paga: true, paga_em: "2026-01-05" })],
+      [],
+      HOJE,
+    );
+    expect(l.resumo.casos_sem_vencimento).toBe(2);
   });
 
   it("propostas fora da alçada pendentes, mais antigas primeiro", () => {
