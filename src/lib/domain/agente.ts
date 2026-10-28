@@ -55,7 +55,7 @@ export type Leitura = {
   };
   fila: (ItemAgente & { grupo: Tarefa["g"]; prioridade: Tarefa["p"]; titulo: string; descricao: string })[];
   atencao_prescricao: (ItemAgente & { vencimento_mais_antigo: string; anos: number; fonte: "parcela" | "cobranca" })[];
-  acordo_em_atraso: (ItemAgente & { parcelas_vencidas: number; valor_vencido: number; vencimento_mais_antigo: string; fonte: "parcelas" | "asaas" | "ambos" })[];
+  acordo_em_atraso: (ItemAgente & { parcelas_vencidas: number; valor_vencido: number | null; vencimento_mais_antigo: string; fonte: "parcelas" | "asaas" | "ambos" | "cadastro" })[];
   propostas_aguardando_cliente: (ItemAgente & { proposta_total: number; enviada_em: string; dias: number })[];
 };
 
@@ -137,6 +137,22 @@ export function leituraAgente(
         valor_vencido: Math.round(vencidas.reduce((s, v) => s + v.valor, 0) * 100) / 100,
         vencimento_mais_antigo: vencidas.reduce((m, v) => (v.vencimento < m ? v.vencimento : m), vencidas[0].vencimento),
         fonte: fontes.size === 2 ? "ambos" : fontes.has("cobranca") ? "asaas" : "parcelas",
+      });
+    }
+  }
+
+  // Terceira fonte: o acordo anotado no próprio caso ({parc, paid, next}), que é o que a mesa preenche no dia a dia.
+  const jaListados = new Set(acordo_em_atraso.map((a) => a.caso_id));
+  for (const c of abertos) {
+    const a = c.acordo;
+    if (c.fase !== "acordo" || !a?.next || jaListados.has(c.id)) continue;
+    if (a.next < hoje && (a.paid ?? 0) < (a.parc ?? 0)) {
+      acordo_em_atraso.push({
+        ...item(c, clientes, hoje),
+        parcelas_vencidas: 1,
+        valor_vencido: null,
+        vencimento_mais_antigo: a.next,
+        fonte: "cadastro",
       });
     }
   }

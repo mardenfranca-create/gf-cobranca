@@ -116,6 +116,18 @@ describe("leitura do agente de Cobrança", () => {
     expect(l.resumo.casos_sem_vencimento).toBe(0);
   });
 
+  it("acordo em atraso pelo cadastro do caso (próxima parcela vencida e não quitada)", () => {
+    const l = leituraAgente(
+      [
+        caso({ id: "atrasado", fase: "acordo", acordo: { parc: 5, paid: 2, next: "2026-10-13" } }),
+        caso({ id: "em-dia", fase: "acordo", acordo: { parc: 5, paid: 2, next: "2026-11-13" } }),
+        caso({ id: "quitado", fase: "acordo", acordo: { parc: 3, paid: 3, next: "2026-09-01" } }),
+      ],
+      clientes, [], [], HOJE,
+    );
+    expect(l.acordo_em_atraso.map((a) => [a.caso_id, a.fonte, a.vencimento_mais_antigo, a.valor_vencido])).toEqual([["atrasado", "cadastro", "2026-10-13", null]]);
+  });
+
   it("conta os casos abertos sem nenhum vencimento cadastrado", () => {
     const l = leituraAgente(
       [caso({ id: "com" }), caso({ id: "sem1" }), caso({ id: "sem2" })],
