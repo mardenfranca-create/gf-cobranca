@@ -227,6 +227,10 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 - **Webhook**: status de entrega (enviada, entregue, lida, falhou) e respostas. Resposta vira evento visível ao cliente e tarefa "responder hoje". "SAIR" marca opt-out.
 - **Responder pelo caso**: nas 24h seguintes a uma resposta do devedor, a operadora responde em texto livre direto do caso (janela de atendimento da Meta). Fora da janela, só modelo.
 
+### Endereço e identidade (Escala Cobrança)
+
+A cobrança tem a identidade visual do Escala (paleta Petróleo & Cobre, Plus Jakarta Sans, logotipo), mas segue como sistema próprio, com banco e login próprios. Endereço: `cobranca.gontijofreitas.adv.br` (projeto `gf-cobranca` na Vercel; DNS na Hostinger com CNAME `cobranca` → `cname.vercel-dns.com`, igual ao `gestao` do Escala). O endereço `gf-cobranca.vercel.app` continua valendo, e é nele que estão os webhooks do Asaas e do WhatsApp e o aquecimento do VPS. Links cruzados: botão "Escala" no topo da mesa e item "Cobrança" no menu lateral do Escala.
+
 ### Aquecimento da função (VPS)
 
 As funções da Vercel rodam em São Paulo (`vercel.json`, `regions: ["gru1"]`), mas o plano desliga a função depois de alguns minutos sem uso, e a próxima abertura paga 1 a 2 s a mais. O VPS do escritório (`ssh gfa-worker`) chama `GET /api/ping` a cada 4 minutos em horário comercial pelo arquivo `deploy/aquecer.cron`, instalado em `/etc/cron.d/gf-cobranca-aquecer`. A rota não usa sessão nem banco e é liberada no `proxy.ts`.
