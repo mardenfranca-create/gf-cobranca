@@ -139,11 +139,11 @@ async function localizarOuCriarDevedor(d: DadosEncaminhamento, chamar: ChamarEsc
     forcar: true,
     observacoes: `Devedor encaminhado ao judicial pela Escala Cobrança: ${d.urlCobranca}`,
     ...(d.caso.telefone ? { telefone: d.caso.telefone } : {}),
-    ...(d.caso.email ? { email: d.caso.email } : {}),
   };
-  let r = await chamar("criar_contato", digitos ? { ...base, documento: digitos } : base);
-  // O Escala recusa CPF/CNPJ inválido: cadastra sem o documento e avisa, para não travar o processo.
-  if (!r.ok && digitos) {
+  const completo = { ...base, ...(digitos ? { documento: digitos } : {}), ...(d.caso.email ? { email: d.caso.email } : {}) };
+  let r = await chamar("criar_contato", completo);
+  // O Escala recusa CPF/CNPJ inválido e e-mail mal formatado (dados importados): cadastra sem os dois, para não travar o processo.
+  if (!r.ok && (digitos || d.caso.email)) {
     const semDoc = await chamar("criar_contato", base);
     if (semDoc.ok) return { id: String(semDoc.dados.id) };
     r = semDoc;

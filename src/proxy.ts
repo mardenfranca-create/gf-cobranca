@@ -34,10 +34,10 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // getUser() valida o token no servidor do Supabase; getSession() não.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() renova a sessão quando vence e confere a assinatura do token com a chave pública do projeto
+  // (ES256, em memória), sem ida ao servidor de Auth a cada página. getSession() sozinho não confere nada.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? data.claims : null;
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC.some((p) => path.startsWith(p));
