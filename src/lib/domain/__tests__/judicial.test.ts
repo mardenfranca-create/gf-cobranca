@@ -112,6 +112,15 @@ describe("abrirNoEscala", () => {
     expect(chamadas.find((c) => c.f === "adicionar_envolvido")!.args.contato_id).toBe("k-sem-doc");
   });
 
+  it("e-mail recusado pelo Escala: cadastra o devedor sem e-mail e segue", async () => {
+    const comEmail = { ...base, caso: { ...base.caso, email: "financeiro@@escola" } };
+    const { chamar, chamadas } = escalaFalso({ ...caminhoFeliz, criar_contato: (a) => (a.email ? erro("e-mail inválido") : ok({ id: "k-sem-email" })) });
+    const r = await abrirNoEscala(comEmail, chamar);
+    expect(r.ok && r.avisos).toEqual([]);
+    expect(chamadas.filter((c) => c.f === "criar_contato").at(-1)!.args).not.toHaveProperty("email");
+    expect(chamadas.find((c) => c.f === "adicionar_envolvido")!.args.contato_id).toBe("k-sem-email");
+  });
+
   it("falhas depois do processo viram avisos, não erro", async () => {
     const { chamar } = escalaFalso({ ...caminhoFeliz, criar_contato: () => erro("fora do ar"), criar_atividade: () => erro("sem permissão") });
     const r = await abrirNoEscala(base, chamar);
