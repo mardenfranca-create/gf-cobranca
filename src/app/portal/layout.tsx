@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoEscala } from "@/components/LogoEscala";
 import { exigeCliente } from "@/lib/auth";
 import { clientePorId, propostasPendentes } from "@/lib/data";
 import { sair } from "@/app/login/actions";
@@ -14,8 +15,8 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
         <div className="wrap">
           <div className="top-row">
             <Link href="/portal" className="mark">
-              <b>GONTIJO FREITAS</b>
-              <span>Recuperação de crédito · Portal do cliente</span>
+              <LogoEscala />
+              <span className="mark-txt"><b>Escala</b><span>Cobrança · Portal do cliente</span></span>
             </Link>
             <div className="client-pick"><label>Carteira</label><strong style={{ fontSize: 13.5 }}>{cliente?.nome ?? u.cliente_id}</strong></div>
             <form action={sair} className="user">

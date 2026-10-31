@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoEscala } from "@/components/LogoEscala";
 import { exigeEquipe } from "@/lib/auth";
 import { listaClientes } from "@/lib/data";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -24,11 +25,13 @@ export default async function MesaLayout({ children }: LayoutProps<"/">) {
         <div className="wrap">
           <div className="top-row">
             <Link href="/fila" className="mark">
-              <b>GONTIJO FREITAS</b>
-              <span>Recuperação de crédito · Mesa de operação</span>
+              <LogoEscala />
+              <span className="mark-txt"><b>Escala</b><span>Cobrança · Mesa de operação</span></span>
             </Link>
             <BuscaGlobal />
             <SeletorCliente clientes={clientes.map((c) => ({ id: c.id, nome: c.nome }))} />
+            {/* Link cruzado: a cobrança é um sistema próprio, com a mesma identidade do Escala. */}
+            <a className="btn ghost sm" href="https://gestao.gontijofreitas.adv.br" title="Abrir o Escala (gestão do escritório)">Escala</a>
             <form action={sair} className="user">
               <div className="avatar">{iniciais}</div>
               <span><Link href="/senha?voltar=/fila" title="Trocar senha" style={{ textDecoration: "none" }}>{u.nome}</Link> · {u.papel === "admin" ? "Admin" : "Operação"}</span>
