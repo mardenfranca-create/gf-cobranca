@@ -227,6 +227,12 @@ Exemplos para o campo "amostra" da Meta: {{1}} Maria · valor R$ 1.250,50 · ref
 - **Webhook**: status de entrega (enviada, entregue, lida, falhou) e respostas. Resposta vira evento visível ao cliente e tarefa "responder hoje". "SAIR" marca opt-out.
 - **Responder pelo caso**: nas 24h seguintes a uma resposta do devedor, a operadora responde em texto livre direto do caso (janela de atendimento da Meta). Fora da janela, só modelo.
 
+### Encaminhamento ao judicial (abre o processo no Escala)
+
+No caso, **Encaminhar ao judicial** (advogado + via) passa o caso para a fase Judicial e abre o processo no Escala pela API dele (`src/lib/domain/judicial.ts`, `src/lib/escala.ts`): localiza o cliente credor nos contatos do Escala (nome ou nome curto; a associação fica guardada em `configuracoes.escala_clientes`), cadastra o devedor como parte contrária (reaproveita o contato com o mesmo CPF/CNPJ), cria o processo com o advogado responsável, título `CLIENTE x DEVEDOR - objeto da ação`, valor da causa e resumo da dívida com as parcelas em aberto e o link da cobrança, e lança a tarefa "distribuir a ação" para daqui a 7 dias. O link do processo fica em "Dados do caso" e num evento interno. Nunca cria cliente no Escala: se o nome não bater ou houver mais de um candidato, o encaminhamento acontece e a próxima ação vira "Abrir o processo no Escala", com o motivo.
+
+Configurar (uma vez): gere um token pessoal em `gestao.gontijofreitas.adv.br/perfil` e grave `ESCALA_API_TOKEN` nas variáveis de produção da Vercel; depois, Redeploy.
+
 ### Endereço e identidade (Escala Cobrança)
 
 A cobrança tem a identidade visual do Escala (paleta Petróleo & Cobre, Plus Jakarta Sans, logotipo), mas segue como sistema próprio, com banco e login próprios. Endereço: `cobranca.gontijofreitas.adv.br` (projeto `gf-cobranca` na Vercel; DNS na Hostinger com CNAME `cobranca` → `cname.vercel-dns.com`, igual ao `gestao` do Escala). O endereço `gf-cobranca.vercel.app` continua valendo, e é nele que estão os webhooks do Asaas e do WhatsApp e o aquecimento do VPS. Links cruzados: botão "Escala" no topo da mesa e item "Cobrança" no menu lateral do Escala.

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { addDias } from "@/lib/domain/datas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type Proposta } from "@/lib/domain/types";
+import { VIAS_JUDICIAIS } from "@/lib/domain/judicial";
 import * as A from "@/lib/actions/casos";
 import { emitirCobranca, emitirParcelasAcordo } from "@/lib/actions/asaas";
 import { alternarOptOut, enviarWhatsApp, responderWhatsApp } from "@/lib/actions/whatsapp";
@@ -198,9 +199,9 @@ export function AcoesCaso({ caso, cliente, hoje, propostaPendente, asaas, whatsa
       }
       if (["neg", "quebra", "regua", "analise"].includes(caso.fase)) acoes.push({ k: "protesto", titulo: "Enviar a protesto", sub: `Regra do cliente: a partir de ${cliente.protesto_dias} dias. Protesto interrompe a prescrição (art. 202, III, CC).`, form: (
         <form action={A.enviarProtesto} className="act-form">{H}<Campo label="Justificativa (obrigatória antes do prazo do cliente)"><textarea name="justificativa" /></Campo><div className="verdict warn">Checagem: título líquido, vencido e com documento de origem.</div><div className="actions"><Enviar className="btn sm">Confirmar envio à CENPROT</Enviar></div></form>) });
-      acoes.push({ k: "judicial", titulo: "Encaminhar ao judicial", sub: "Abre o caso no Astrea e designa advogado. Honorário sobe para a faixa judicial.", form: (
+      acoes.push({ k: "judicial", titulo: "Encaminhar ao judicial", sub: "Abre o processo no Escala com o advogado, o devedor como parte contrária e a tarefa de distribuir. Honorário sobe para a faixa judicial.", form: (
         <form action={A.encaminharJudicial} className="act-form">{H}
-          <div className="frow"><Campo label="Advogado"><Sel name="advogado" opts={[["Lucas", "Lucas"], ["Jaqueline", "Jaqueline"], ["Letícia", "Letícia"]]} /></Campo><Campo label="Via"><Sel name="via" opts={[["Execução (título executivo)", "Execução (título executivo)"], ["Monitória", "Monitória"], ["Juizado Especial", "Juizado Especial"]]} /></Campo></div>
+          <div className="frow"><Campo label="Advogado"><Sel name="advogado" opts={[["Lucas", "Lucas"], ["Jaqueline", "Jaqueline"], ["Letícia", "Letícia"]]} /></Campo><Campo label="Via"><Sel name="via" opts={VIAS_JUDICIAIS.map((v) => [v, v])} /></Campo></div>
           <div className="verdict warn">Confira se o contrato tem 2 testemunhas ou assinatura eletrônica validada antes de escolher execução.</div>
           <div className="actions"><Enviar className="btn sm">Encaminhar</Enviar></div>
         </form>) });
