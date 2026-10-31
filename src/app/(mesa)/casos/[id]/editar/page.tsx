@@ -84,7 +84,7 @@ export default async function EditarCasoPage(props: PageProps<"/casos/[id]/edita
             const sit = situacaoParcela(p);
             const Hp = <><input type="hidden" name="caso_id" value={caso.id} /><input type="hidden" name="parcela_id" value={p.id} /></>;
             return (
-              <div key={p.id} style={{ border: "1px solid var(--ink-10)", borderRadius: 6, padding: 12, display: "grid", gap: 10, opacity: sit === "aberta" ? 1 : 0.85 }}>
+              <div key={p.id} style={{ border: "1px solid var(--ink-10)", borderRadius: 10, padding: 12, display: "grid", gap: 10, opacity: sit === "aberta" ? 1 : 0.85 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <b style={{ fontSize: 13 }}>{p.referencia} · <span className="num">{brl(p.valor)}</span> · venc. <span className="num">{fmtData(p.vencimento)}</span></b>
                   <span className={`pill ${sit === "aberta" ? "ph-regua" : sit === "paga" ? "ph-pago" : "ph-devolvido"}`}>{SITUACAO_PARCELA[sit]}{sit === "paga" && p.paga_em ? ` em ${fmtData(p.paga_em)}` : sit === "retirada" && p.retirada_em ? ` em ${fmtData(p.retirada_em)}` : ""}</span>

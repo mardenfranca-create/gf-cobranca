@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { entrar } from "./actions";
+import { LogoEscala } from "@/components/LogoEscala";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -11,8 +12,8 @@ export default async function LoginPage(props: PageProps<"/login">) {
     <div className="login">
       <form className="panel" action={entrar}>
         <div className="mark">
-          <b>GONTIJO FREITAS</b>
-          <span>Recuperação de crédito</span>
+          <LogoEscala size={40} />
+          <span className="mark-txt"><b>Escala</b><span>Cobrança · Gontijo Freitas</span></span>
         </div>
         <div className="field">
           <label htmlFor="email">E-mail</label>

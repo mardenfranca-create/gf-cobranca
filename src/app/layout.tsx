@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
-import { Inter, Inria_Serif } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
 const ui = Inter({ variable: "--font-ui", subsets: ["latin"], display: "swap" });
-const display = Inria_Serif({ variable: "--font-display", subsets: ["latin"], weight: ["400", "700"], display: "swap" });
+// Mesmas fontes do Escala: Inter no corpo, Plus Jakarta Sans nos títulos.
+const display = Plus_Jakarta_Sans({ variable: "--font-display", subsets: ["latin"], weight: ["500", "600", "700", "800"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Cobrança GF", template: "%s · Cobrança GF" },
-  description: "Recuperação de crédito · Gontijo Freitas Advogados",
+  title: { default: "Escala Cobrança", template: "%s · Escala Cobrança" },
+  description: "Escala Cobrança: recuperação de crédito do Gontijo Freitas Advogados.",
   robots: { index: false, follow: false },
 };
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LogoEscala } from "@/components/LogoEscala";
 import Link from "next/link";
 import { usuarioAtual } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -15,7 +16,7 @@ export default async function SenhaPage(props: PageProps<"/senha">) {
   return (
     <div className="login">
       <form className="panel" action={trocarSenha}>
-        <div className="mark"><b>GONTIJO FREITAS</b><span>Trocar senha · {u.nome}</span></div>
+        <div className="mark"><LogoEscala size={40} /><span className="mark-txt"><b>Escala</b><span>Trocar senha · {u.nome}</span></span></div>
         <input type="hidden" name="voltar" value={voltar} />
         <div className="field"><label htmlFor="nova">Nova senha</label><div className="inp"><input id="nova" name="nova" type="password" autoComplete="new-password" minLength={8} required /></div><small>Mínimo de 8 caracteres, com letras e números.</small></div>
         <div className="field"><label htmlFor="confirma">Repita a nova senha</label><div className="inp"><input id="confirma" name="confirma" type="password" autoComplete="new-password" minLength={8} required /></div></div>
