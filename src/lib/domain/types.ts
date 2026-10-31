@@ -89,7 +89,8 @@ export type Caso = {
   email: string | null;
   processo: string | null;
   acordo: { parc: number; paid: number; next: string } | null;
-  origem: { trello_url?: string; trello_list?: string; etiquetas?: string[] } | null;
+  /** De onde veio e para onde foi: cartão do Trello e, depois do encaminhamento ao judicial, o processo no Escala. */
+  origem: { trello_url?: string; trello_list?: string; etiquetas?: string[]; escala_url?: string } | null;
   asaas_customer_id: string | null;
   wa_optout: boolean;
   pendencias: string[];

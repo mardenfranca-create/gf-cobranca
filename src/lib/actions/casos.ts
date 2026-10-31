@@ -10,6 +10,9 @@ import { reconcilia } from "@/lib/domain/reconcile";
 import { addDias, brl, fmtData, hojeISO } from "@/lib/domain/datas";
 import { confereAlcada } from "@/lib/domain/alcada";
 import { colunasExcecao, colunasProxima, derivaProxima, mapaRegua, marca, type ProximaAcao } from "@/lib/domain/regua";
+import { abrirNoEscala, VIAS_JUDICIAIS, type ResultadoEncaminhamento } from "@/lib/domain/judicial";
+import { chamarEscala, escalaEnv } from "@/lib/escala";
+import { registraEvento } from "@/lib/abertura-caso";
 import { descreveParcela, desfechoSemAbertas, recalculaValores, situacaoParcela, validaParcela } from "@/lib/domain/parcelas";
 import { EQUIPE, EXCECOES, FOLLOWUPS, type Caso, type Cliente, type TipoExcecao, type TipoFollowup } from "@/lib/domain/types";
 
@@ -137,13 +140,68 @@ export async function enviarProtesto(fd: FormData) {
   redirect(`/casos/${id}?ok=${encodeURIComponent("Envio a protesto registrado.")}`);
 }
 
+/** Contatos do Escala já associados a cada cliente da cobrança (`configuracoes.escala_clientes`: cliente_id → contato_id). */
+async function mapaClientesEscala(sb: Awaited<ReturnType<typeof supabaseServer>>): Promise<Record<string, string>> {
+  const { data } = await sb.from("configuracoes").select("valor").eq("chave", "escala_clientes").maybeSingle();
+  return (data?.valor as Record<string, string> | null) ?? {};
+}
+
+const urlCobranca = () => (process.env.APP_URL || "https://gf-cobranca.vercel.app").replace(/\/+$/, "");
+
+/**
+ * Encaminha ao judicial e abre o processo no Escala (src/lib/domain/judicial.ts): cliente credor localizado,
+ * devedor como parte contrária, advogado responsável e tarefa de distribuir a ação. Se o Escala não estiver
+ * configurado ou recusar, o encaminhamento acontece do mesmo jeito e a próxima ação vira "abrir no Escala".
+ */
 export async function encaminharJudicial(fd: FormData) {
   const id = s(fd, "caso_id");
-  await aplica(id, ({ hoje }) => ({
-    patch: { fase: "judicial", processo: "em distribuição", acordo: null, responsavel: s(fd, "advogado") || "Lucas", ...prox(marca(hoje, 30, "judicial", "Conferir distribuição e citação no Astrea")) },
-    evento: { tipo: "judicial", texto: `Encaminhado ao judicial (${s(fd, "via")}). Advogado: ${s(fd, "advogado")}. Caso a abrir no Astrea.` },
+  const advogado = s(fd, "advogado") || "Lucas";
+  const via = s(fd, "via") || VIAS_JUDICIAIS[0];
+  const u = await exigeEquipe();
+  const sb = await supabaseServer();
+  const [{ data: casoRow }, { data: parcelas }] = await Promise.all([
+    sb.from("casos").select("*").eq("id", id).single(),
+    sb.from("parcelas").select("referencia, valor, vencimento, paga, retirada_em").eq("caso_id", id),
+  ]);
+  if (!casoRow) throw new Error("Caso não encontrado");
+  const caso = casoRow as Caso;
+  const { data: cliente } = await sb.from("clientes").select("id, nome, nome_curto").eq("id", caso.cliente_id).single();
+  const jaAberto = caso.origem?.escala_url ?? null;
+  const integrado = escalaEnv().ok;
+
+  let resultado: ResultadoEncaminhamento | null = null;
+  if (!jaAberto && integrado && cliente) {
+    const mapa = await mapaClientesEscala(sb);
+    resultado = await abrirNoEscala(
+      { caso, cliente, parcelas: parcelas ?? [], via, advogado, hoje: hojeISO(), urlCobranca: `${urlCobranca()}/casos/${id}`, contatoClienteId: mapa[caso.cliente_id] ?? null },
+      chamarEscala,
+    );
+    // Guarda a associação cliente → contato do Escala para os próximos encaminhamentos (só admin grava; operador segue sem cache).
+    if (resultado.ok && mapa[caso.cliente_id] !== resultado.contatoClienteId) {
+      await sb.from("configuracoes").upsert({ chave: "escala_clientes", valor: { ...mapa, [caso.cliente_id]: resultado.contatoClienteId }, atualizado_por: u.nome, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+    }
+  }
+  const escalaUrl = jaAberto ?? (resultado?.ok ? resultado.url : null);
+  const motivo = escalaUrl ? null : !integrado ? "integração com o Escala não configurada (ESCALA_API_TOKEN)" : resultado && !resultado.ok ? resultado.erro : "cliente não encontrado";
+
+  await aplica(id, ({ caso: c, hoje }) => ({
+    patch: {
+      fase: "judicial", processo: "em distribuição", acordo: null, responsavel: advogado,
+      origem: escalaUrl ? { ...(c.origem ?? {}), escala_url: escalaUrl } : c.origem,
+      ...prox(escalaUrl ? marca(hoje, 30, "judicial", "Conferir distribuição e citação no Escala") : marca(hoje, 1, "judicial", "Abrir o processo no Escala")),
+    },
+    evento: { tipo: "judicial", texto: `Encaminhado ao judicial (${via}). Advogado: ${advogado}.` },
   }));
-  redirect(`/casos/${id}?ok=${encodeURIComponent("Caso encaminhado ao judicial.")}`);
+  const avisos = resultado?.ok ? resultado.avisos : [];
+  await registraEvento(sb, id, { nome: u.nome, id: u.id }, "judicial",
+    escalaUrl
+      ? `${jaAberto ? "Processo já aberto no Escala" : "Processo aberto no Escala"}: ${escalaUrl}${avisos.length ? `. Atenção: ${avisos.join("; ")}.` : "."}`
+      : `Processo não aberto no Escala: ${motivo}. Abra à mão.`,
+    false);
+  const msg = escalaUrl
+    ? `Caso encaminhado ao judicial e processo aberto no Escala.${avisos.length ? ` Atenção: ${avisos.join("; ")}.` : ""}`
+    : `Caso encaminhado ao judicial. O processo não foi aberto no Escala (${motivo}): abra à mão.`;
+  redirect(`/casos/${id}?ok=${encodeURIComponent(msg)}`);
 }
 
 export async function marcarParcelaPaga(fd: FormData) {

@@ -79,6 +79,7 @@ export default async function CasoPage(props: PageProps<"/casos/[id]">) {
               {caso.processo && <><dt>Processo</dt><dd>{caso.processo}</dd></>}
               <dt>Alçada do cliente</dt><dd>até {cliente?.limites.desc}% · {cliente?.limites.parc}× · entrada ≥ {cliente?.limites.ent}%</dd>
               {origem.trello_list && <><dt>Lista no Trello</dt><dd>{origem.trello_list}</dd></>}
+              {origem.escala_url && <><dt>Processo no Escala</dt><dd><a href={origem.escala_url} target="_blank" rel="noopener" style={{ color: "var(--bronze-dark)" }}>abrir no Escala</a></dd></>}
               {origem.trello_url && <><dt>Cartão</dt><dd><a href={origem.trello_url} target="_blank" rel="noopener" style={{ color: "var(--bronze-dark)" }}>abrir no Trello</a></dd></>}
             </dl>
           </div>
